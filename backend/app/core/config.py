@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     redis: RedisSettings = RedisSettings()
     jwt: JWTSettings
     encrypt: EncryptSettings
-    llm: LLMSettings = LLMSettings()
+    llm: LLMSettings
     trading: TradingSettings = TradingSettings()
 
     cors_origins: list[str] = ["http://localhost:3000"]
