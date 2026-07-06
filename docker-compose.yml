@@ -1,7 +1,7 @@
 # 与此文件相关命令带 --env-file .env.docker 参数 eg: docker compose --env-file .env.docker up -d
 services:
   postgres:
-    image: postgres:15
+    image: timescale/timescaledb:latest-pg15
     ports:
       - "5432:5432"
     volumes:

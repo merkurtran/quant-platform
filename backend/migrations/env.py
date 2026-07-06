@@ -9,6 +9,7 @@ from app.core.config import get_settings
 from shared.db.base import Base
 # 这里 noqa 是为了避免 ruff 检查时报错，因为这里的 import 是动态的，所以无法检查
 from app.models.user import User # noqa: F401 (后续新模型都需要在此处补一行 import)
+from app.models.market import Watchlists, WatchlistItems, Klines  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
