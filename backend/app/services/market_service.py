@@ -1,6 +1,8 @@
 from sqlalchemy.orm import Session
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.models.market import Klines, Watchlists, WatchlistItems
+from app.models.market import Klines, Watchlists, WatchlistItems, CorporateActions
+from shared.market_data.adjustment import AdjustMethod, calculate_adjusted_prices
 
 
 class WatchlistNotFoundError(Exception):
@@ -25,6 +27,28 @@ def get_klines(db: Session, symbol: str, period: str, limit: int = 300) -> list[
         .limit(limit)
         .all()
     )
+
+
+def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int, adjust: AdjustMethod) -> list[dict]:
+    """查询 k 线并复权"""
+    klines = get_klines(db, symbol, period, limit)
+    raw_dicts = [
+        {
+            "ts": k.ts,
+            "open": k.open,
+            "high": k.high,
+            "low": k.low,
+            "close": k.close,
+            "volume": k.volume,
+            "amount": k.amount,
+        }
+        for k in klines
+    ]
+    if adjust == AdjustMethod.NONE:
+        return raw_dicts
+    
+    actions = get_corporate_actions_from(db, symbol)
+    return calculate_adjusted_prices(raw_dicts, actions, adjust)
 
 
 def get_watchlists(db: Session, user_id: int) -> list[Watchlists]:
@@ -67,3 +91,45 @@ def create_watchlist(db: Session, user_id: int, name: str) -> Watchlists:
     db.commit()
     db.refresh(watchlist)
     return watchlist
+
+
+def save_corporate_actions(db: Session, symbol: str, actions: list[dict]) -> None:
+    """批量 upsert 除权除息记录"""
+    if not actions:
+        return
+    rows = [{"symbol": symbol, **action} for action in actions]
+    stmt = pg_insert(CorporateActions).values(rows)
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["symbol", "ex_date", "action_type"],
+        set_={
+            "cash_per_share": stmt.excluded.cash_per_share,
+            "stock_ratio": stmt.excluded.stock_ratio,
+            "rights_price": stmt.excluded.rights_price,
+            "rights_ratio": stmt.excluded.rights_ratio,
+        },
+    )
+    db.execute(stmt)
+    db.commit()
+
+
+def get_corporate_actions_from(db: Session, symbol: str) -> list[dict]:
+    """从数据库查询这支股票的除权除息记录，按 ex_date 正序， 给复权计算使用"""
+    rows = (
+        db.query(CorporateActions)
+        .filter(CorporateActions.symbol == symbol)
+        .order_by(CorporateActions.ex_date.asc())
+        .all()
+    )
+    return [
+        {
+            "ex_date": r.ex_date,
+            "action_type": r.action_type,
+            "cash_per_share": r.cash_per_share,
+            "stock_ratio": r.stock_ratio,
+            "rights_price": r.rights_price,
+            "rights_ratio": r.rights_ratio,
+        }
+        for r in rows
+    ]
+
+

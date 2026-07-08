@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from enum import Enum
 
 from app.core.deps import get_current_user
 from app.models.user import User
@@ -18,9 +19,16 @@ from app.services.market_service import (
     remove_watchlist_item,
     WatchlistNotFoundError,
     create_watchlist,
+    get_klines_with_adjustment
 )
 from shared.db.session import get_db
+from shared.market_data.adjustment import AdjustMethod
 
+
+class PublicAdjustParam(str, Enum):
+    """API 公开的复权参数"""
+    NONE = "none"
+    QFQ_RATIO = "qfq_ratio"
 
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
 
@@ -29,13 +37,19 @@ def list_klines(
     symbol: str,
     period: str = "1d",
     limit: int = 300,
+    adjust: PublicAdjustParam = PublicAdjustParam.QFQ_RATIO, # 量化默认比例前复权 
     db: Session = Depends(get_db)
 ):
+    internal_method = AdjustMethod(adjust.value)
+    try:
+        items = get_klines_with_adjustment(db, symbol, period, limit, internal_method)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))
     klines = get_klines(db, symbol=symbol, period=period, limit=limit)
     return KlineListResponse(
         symbol=symbol,
         period=period,
-        items=[KlineItem.model_validate(k) for k in klines],
+        items=[KlineItem.model_validate(item) for item in items],
     )
 
 

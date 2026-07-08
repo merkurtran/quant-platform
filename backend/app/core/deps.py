@@ -6,6 +6,7 @@ from jose import JWTError
 from app.core.security import decode_access_token
 from app.models.user import User
 from shared.db.session import get_db
+from app.services.auth_service import get_user_by_id, UserNotFoundError
 
 security = HTTPBearer()
 
@@ -25,11 +26,11 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
+    try:
+        return get_user_by_id(db, user_id)
+    except UserNotFoundError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    return user

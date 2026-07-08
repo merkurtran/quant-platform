@@ -25,3 +25,7 @@ class TokenResponse(BaseModel):
     refresh_token: str
     expires_in: int
     user: UserPublic
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str

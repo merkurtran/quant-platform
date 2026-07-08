@@ -12,6 +12,9 @@ class InvalidCredentialsError(Exception):
     pass
 
 
+class UserNotFoundError(Exception):
+    pass
+
 def register_user(db: Session, email: str, password: str, nickname: str) -> User:
     if db.query(User).filter(User.email == email).first():
         raise EmailAlreadyExistsError("Email already exists")
@@ -29,4 +32,11 @@ def authenticate_user(db: Session, email: str, password: str) -> User:
         raise InvalidCredentialsError("Invalid credentials")
     if not verify_password(password, user.password_hash):
         raise InvalidCredentialsError("Invalid credentials")
+    return user
+
+
+def get_user_by_id(db: Session, user_id: int) -> User:
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        raise UserNotFoundError(f"User {user_id} not found")
     return user

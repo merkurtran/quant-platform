@@ -1,6 +1,8 @@
-from sqlalchemy import String, BigInteger, ForeignKey, DateTime, func, Integer, UniqueConstraint, Index, Numeric, PrimaryKeyConstraint, event, DDL
+from sqlalchemy import String, BigInteger, ForeignKey, DateTime, func, Integer, UniqueConstraint, Numeric, PrimaryKeyConstraint, Date
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-from datetime import datetime
+from datetime import datetime,date
+from typing import Optional
+from decimal import Decimal
 
 from shared.db.base import Base, TimestampMixin
 
@@ -40,13 +42,31 @@ class Klines(Base):
     symbol: Mapped[str] = mapped_column(String(16), nullable=False)
     period: Mapped[str] = mapped_column(String(8), nullable=False) # 1m / 5m / 15m / 1d
     ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    open: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
-    high: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
-    low: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
-    close: Mapped[float] = mapped_column(Numeric(12, 3), nullable=False)
-    volume: Mapped[float] = mapped_column(Numeric(18, 2), nullable=False)
-    amount: Mapped[float | None] = mapped_column(Numeric(18, 2), nullable=True)
+    open: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    high: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    low: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    close: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    volume: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    amount: Mapped[Decimal | None] = mapped_column(Numeric(18, 2), nullable=True)
 
     __table_args__ = (
         PrimaryKeyConstraint("symbol", "period", "ts", name='pk_klines'),
+    )
+
+
+class CorporateActions(Base):
+    __tablename__ = "corporate_actions"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    symbol: Mapped[str] = mapped_column(String(16), nullable=False)
+    ex_date: Mapped[date] = mapped_column(Date, nullable=False)
+    action_type: Mapped[str] = mapped_column(String(16), nullable=False)
+    cash_per_share: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), default=0)
+    stock_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), default=0)
+    rights_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), default=0)
+    rights_ratio: Mapped[Optional[Decimal]] = mapped_column(Numeric(10, 4), default=0)  # 配股比例
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    __table_args__ = (
+        UniqueConstraint('symbol', 'ex_date', 'action_type', name='uq_corporate_actions_symbol_ex_date_action_type'),
     )
