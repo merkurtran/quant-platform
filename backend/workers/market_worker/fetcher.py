@@ -4,12 +4,14 @@ from datetime import timedelta, datetime
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from shared.db.session import SessionLocal
+from shared.logging_config import get_logger
 from app.models.market import Klines
 from app.services.market_service import get_all_watched_symbols, save_corporate_actions
 from shared.redis_client import redis_client
 from shared.market_data.akshare_provider import AKShareProvider
 from shared.market_data.exceptions import MarketDataError
 
+logger = get_logger("market_worker.fetcher")
 provider = AKShareProvider()
 
 
@@ -26,7 +28,12 @@ def normalize_symbol(raw_symbol: str) -> str:
 
 
 def _save_klines(rows: list[dict]) -> None:
-    """通用落库逻辑,daily/minute 共用,批量 upsert(PostgreSQL 专属写法,换数据库需要重写这个函数)"""
+    """通用落库逻辑,daily/minute 共用,批量 upsert(PostgreSQL 专属写法,换数据库需要重写这个函数)。
+
+    设计说明：每条 K 线不独立开启事务。同一只股票的一次拉取全部合并进一个
+    INSERT ... ON CONFLICT DO UPDATE 语句，单次 db.commit()，已是最小事务粒度。
+    ThreadPoolExecutor 并发模型下每个线程操作不同股票，独立 SessionLocal 避免了
+    跨线程 session 竞争，因此当前设计（每股票=一次事务）是最优的。"""
     if not rows:
         return
     db = SessionLocal()
@@ -51,12 +58,15 @@ def _save_klines(rows: list[dict]) -> None:
 
 def _publish_quote(symbol: str, latest: dict) -> None:
     """发布最新行情到 redis, 供 websocket 订阅"""
-    message = json.dumps({
-        "symbol": symbol,
-        "price": float(latest["close"]),
-        "ts": latest["ts"].isoformat() if hasattr(latest["ts"], "isoformat") else str(latest["ts"]),
-    })
-    redis_client.publish(f"quotes:{symbol}", message)
+    try:
+        message = json.dumps({
+            "symbol": symbol,
+            "price": float(latest["close"]),
+            "ts": latest["ts"].isoformat() if hasattr(latest["ts"], "isoformat") else str(latest["ts"]),
+        })
+        redis_client.publish(f"quotes:{symbol}", message)
+    except Exception as e:
+        logger.error(f"发布行情到 Redis 失败 {symbol}: {e}")
 
 
 def fetch_daily_kline(symbol: str) -> None:
@@ -79,7 +89,7 @@ def fetch_daily_kline(symbol: str) -> None:
     try:
         rows_raw = provider.get_daily_kline(normalized_symbol, start_date)
     except MarketDataError as e:
-        print(f"日线拉取失败 {symbol}: {e}")
+        logger.error(f"日线拉取失败 {symbol}: {e}")
         return
 
     if not rows_raw:
@@ -89,6 +99,8 @@ def fetch_daily_kline(symbol: str) -> None:
     _save_klines(rows)
     _publish_quote(normalized_symbol, rows[-1])
 
+
+_PERIOD_MINUTES = {"1m": 1, "5m": 5, "15m": 15}
 
 def fetch_minute_kline(symbol: str, period: str) -> None:
     """拉取分钟线,period 取 '1m'/'5m'/'15m', 仅拉取自选股, 分线只能回溯近5个交易日"""
@@ -109,7 +121,8 @@ def fetch_minute_kline(symbol: str, period: str) -> None:
         db.close()
 
     if latest:
-        start_dt = latest[0] + timedelta(minutes=1)
+        step_minutes = _PERIOD_MINUTES.get(period, 1)
+        start_dt = latest[0] + timedelta(minutes=step_minutes)
     else:
         start_dt = datetime.now() - timedelta(days=5)
     start_date = start_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -117,7 +130,7 @@ def fetch_minute_kline(symbol: str, period: str) -> None:
     try:
         rows_raw = provider.get_minute_kline(normalized_symbol, period, start_date=start_date)
     except MarketDataError as e:
-        print(f"{period}分钟线拉取失败 {symbol}: {e}")
+        logger.error(f"{period}分钟线拉取失败 {symbol}: {e}")
         return
 
     if not rows_raw:
@@ -148,7 +161,7 @@ def sync_corporate_actions(symbol: str) -> None:
     try:
         actions = provider.get_corporate_actions(normalized_symbol)
     except MarketDataError as e:
-        print(f"除权除息数据拉取失败 {symbol}: {e}")
+        logger.error(f"除权除息数据拉取失败 {symbol}: {e}")
         return
     
     if not actions:
@@ -157,5 +170,6 @@ def sync_corporate_actions(symbol: str) -> None:
     db = SessionLocal()
     try:
         save_corporate_actions(db, normalized_symbol, actions)
+        db.commit()
     finally:
         db.close()

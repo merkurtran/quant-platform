@@ -112,7 +112,6 @@ class AKShareProvider(MarketDataProvider):
                         "rights_price": Decimal("0"),
                         "rights_ratio": Decimal("0"),
                     })
-                return results
             except KeyError as e:
                 raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
         

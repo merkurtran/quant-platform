@@ -1,5 +1,5 @@
 from functools import lru_cache
-from pydantic import BaseModel, SecretStr
+from pydantic import BaseModel, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class DatabaseSettings(BaseModel):
@@ -8,6 +8,13 @@ class DatabaseSettings(BaseModel):
     user: str
     password: SecretStr
     database: str = "quant_platform"
+
+    @field_validator("user")
+    @classmethod
+    def user_must_not_be_empty(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("database user is required")
+        return v.strip()
 
     @property
     def url(self) -> str:
@@ -33,9 +40,23 @@ class JWTSettings(BaseModel):
     access_token_expire_minutes: int = 120
     refresh_token_expire_days: int = 30
 
+    @field_validator("secret_key")
+    @classmethod
+    def secret_key_must_not_be_empty(cls, v: SecretStr) -> SecretStr:
+        if not v.get_secret_value().strip():
+            raise ValueError("JWT secret_key is required and must not be empty")
+        return v
+
 
 class EncryptSettings(BaseModel):
     credentials_key: SecretStr # broker_accounts.credentials_encrypted 用的 Fernet key
+
+    @field_validator("credentials_key")
+    @classmethod
+    def key_must_not_be_empty(cls, v: SecretStr) -> SecretStr:
+        if not v.get_secret_value().strip():
+            raise ValueError("credentials_key is required and must not be empty")
+        return v
 
 
 class LLMSettings(BaseModel):
@@ -43,6 +64,13 @@ class LLMSettings(BaseModel):
     api_key: SecretStr
     model: str = "gpt-3.5-turbo"
     rate_limit_per_minute: int = 10
+
+    @field_validator("api_key")
+    @classmethod
+    def api_key_must_not_be_empty(cls, v: SecretStr) -> SecretStr:
+        if not v.get_secret_value().strip():
+            raise ValueError("LLM api_key is required and must not be empty")
+        return v
 
 
 class TradingSettings(BaseModel):

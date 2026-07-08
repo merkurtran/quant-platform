@@ -17,7 +17,7 @@ class KlineItem(BaseModel):
 class KlineListResponse(BaseModel):
     symbol: str
     period: str
-    adjust: str
+    adjust: str = "qfq"
     items: list[KlineItem]
 
 

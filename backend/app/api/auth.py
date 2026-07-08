@@ -4,6 +4,7 @@ from jose import JWTError
 
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.core.config import get_settings
+from app.core.rate_limit import rate_limiter
 from app.schemas.auth import RegisterRequest, LoginRequest, TokenResponse, UserPublic, RefreshTokenRequest
 from app.services.auth_service import (
     register_user,
@@ -21,7 +22,7 @@ settings = get_settings()
 
 
 @router.post("/register", response_model=TokenResponse)
-def register(payload: RegisterRequest, db: Session = Depends(get_db)):
+def register(payload: RegisterRequest, db: Session = Depends(get_db), _: None = Depends(rate_limiter(max_requests=5, window_seconds=60))):
     try:
         user = register_user(db, payload.email, payload.password, payload.nickname)
     except EmailAlreadyExistsError:
@@ -35,7 +36,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(payload: LoginRequest, db: Session = Depends(get_db)):
+def login(payload: LoginRequest, db: Session = Depends(get_db), _: None = Depends(rate_limiter(max_requests=10, window_seconds=60))):
     try:
         user = authenticate_user(db, payload.email, payload.password)
     except InvalidCredentialsError:
@@ -49,7 +50,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.post("/refresh", response_model=TokenResponse)
-def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db)):
+def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db), _: None = Depends(rate_limiter(max_requests=10, window_seconds=60))):
     try:
         token_payload = decode_refresh_token(payload.refresh_token)
     except JWTError:

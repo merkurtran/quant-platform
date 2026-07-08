@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from enum import Enum
 
@@ -18,6 +18,8 @@ from app.services.market_service import (
     add_watchlist_item,
     remove_watchlist_item,
     WatchlistNotFoundError,
+    WatchlistItemAlreadyExistsError,
+    WatchlistItemNotFoundError,
     create_watchlist,
     get_klines_with_adjustment
 )
@@ -26,29 +28,40 @@ from shared.market_data.adjustment import AdjustMethod
 
 
 class PublicAdjustParam(str, Enum):
-    """API 公开的复权参数"""
+    """API 公开的复权参数，取值与产品文档保持一致"""
     NONE = "none"
-    QFQ_RATIO = "qfq_ratio"
+    QFQ = "qfq"
+
+# 公开参数到内部 AdjustMethod 的映射
+_PUBLIC_TO_INTERNAL: dict[PublicAdjustParam, AdjustMethod] = {
+    PublicAdjustParam.NONE: AdjustMethod.NONE,
+    PublicAdjustParam.QFQ: AdjustMethod.QFQ_RATIO,
+}
 
 router = APIRouter(prefix="/api/v1/market", tags=["market"])
 
+VALID_PERIODS = frozenset({"1m", "5m", "15m", "30m", "60m", "1d", "1w", "1M"})
+
 @router.get("/klines", response_model=KlineListResponse)
 def list_klines(
-    symbol: str,
-    period: str = "1d",
-    limit: int = 300,
-    adjust: PublicAdjustParam = PublicAdjustParam.QFQ_RATIO, # 量化默认比例前复权 
-    db: Session = Depends(get_db)
+    symbol: str = Query(..., min_length=1),
+    period: str = Query("1d", pattern=r"^(1m|5m|15m|30m|60m|1d|1w|1M)$"),
+    limit: int = Query(300, ge=1, le=2000),
+    adjust: PublicAdjustParam = PublicAdjustParam.QFQ,
+    start: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    end: str | None = Query(None, pattern=r"^\d{4}-\d{2}-\d{2}$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
-    internal_method = AdjustMethod(adjust.value)
+    internal_method = _PUBLIC_TO_INTERNAL[adjust]
     try:
-        items = get_klines_with_adjustment(db, symbol, period, limit, internal_method)
+        items = get_klines_with_adjustment(db, symbol, period, limit, internal_method, start=start, end=end)
     except NotImplementedError as e:
         raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))
-    klines = get_klines(db, symbol=symbol, period=period, limit=limit)
     return KlineListResponse(
         symbol=symbol,
         period=period,
+        adjust=adjust.value,
         items=[KlineItem.model_validate(item) for item in items],
     )
 
@@ -73,6 +86,8 @@ def add_item(
         item = add_watchlist_item(db, watchlist_id=watchlist_id, symbol=payload.symbol, name=payload.name, user_id=current_user.id)
     except WatchlistNotFoundError:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist not found")
+    except WatchlistItemAlreadyExistsError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Symbol already exists in this watchlist")
     return WatchlistItemPublic.model_validate(item)
 
 
@@ -96,5 +111,8 @@ def create_watchlist_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    watchlist = create_watchlist(db, user_id=current_user.id, name=payload.name)
+    try:
+        watchlist = create_watchlist(db, user_id=current_user.id, name=payload.name)
+    except WatchlistItemAlreadyExistsError:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Watchlist with this name already exists")
     return WatchlistPublic.model_validate(watchlist)

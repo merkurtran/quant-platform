@@ -1,7 +1,7 @@
 # 与此文件相关命令带 --env-file .env.docker 参数 eg: docker compose --env-file .env.docker up -d
 services:
   postgres:
-    image: timescale/timescaledb:latest-pg15
+    image: timescale/timescaledb:2.16.1-pg15
     ports:
       - "5432:5432"
     volumes:
@@ -12,8 +12,9 @@ services:
       POSTGRES_DB: ${DB_NAME}
 
   redis:
-    image: redis:7
+    image: redis:7.2-alpine
     ports:
       - "6379:6379"
     volumes:
       - ./data/redis:/data
+    command: redis-server --appendonly yes

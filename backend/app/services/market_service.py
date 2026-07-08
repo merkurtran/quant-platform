@@ -1,11 +1,22 @@
-from sqlalchemy.orm import Session
+from datetime import datetime
+
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.exc import IntegrityError
 
 from app.models.market import Klines, Watchlists, WatchlistItems, CorporateActions
 from shared.market_data.adjustment import AdjustMethod, calculate_adjusted_prices
 
 
 class WatchlistNotFoundError(Exception):
+    pass
+
+
+class WatchlistItemAlreadyExistsError(Exception):
+    pass
+
+
+class WatchlistItemNotFoundError(Exception):
     pass
 
 
@@ -19,19 +30,21 @@ def _check_watchlist_ownership(db: Session, watchlist_id: int, user_id: int) -> 
         raise WatchlistNotFoundError(f"Watchlist {watchlist_id} not found for user {user_id}")
     
 
-def get_klines(db: Session, symbol: str, period: str, limit: int = 300) -> list[Klines]:
-    return (
+def get_klines(db: Session, symbol: str, period: str, limit: int = 300, start: str | None = None, end: str | None = None) -> list[Klines]:
+    q = (
         db.query(Klines)
         .filter(Klines.symbol == symbol, Klines.period == period)
-        .order_by(Klines.ts.asc())
-        .limit(limit)
-        .all()
     )
+    if start:
+        q = q.filter(Klines.ts >= start)
+    if end:
+        q = q.filter(Klines.ts <= end)
+    return q.order_by(Klines.ts.asc()).limit(limit).all()
 
 
-def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int, adjust: AdjustMethod) -> list[dict]:
+def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int, adjust: AdjustMethod, start: str | None = None, end: str | None = None) -> list[dict]:
     """查询 k 线并复权"""
-    klines = get_klines(db, symbol, period, limit)
+    klines = get_klines(db, symbol, period, limit, start=start, end=end)
     raw_dicts = [
         {
             "ts": k.ts,
@@ -52,7 +65,12 @@ def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int
 
 
 def get_watchlists(db: Session, user_id: int) -> list[Watchlists]:
-    return db.query(Watchlists).filter(Watchlists.user_id == user_id).all()
+    return (
+        db.query(Watchlists)
+        .options(selectinload(Watchlists.items))
+        .filter(Watchlists.user_id == user_id)
+        .all()
+    )
 
 
 def add_watchlist_item(db: Session, watchlist_id: int, symbol: str, name: str | None, user_id: int) -> WatchlistItems:
@@ -60,19 +78,25 @@ def add_watchlist_item(db: Session, watchlist_id: int, symbol: str, name: str | 
 
     item = WatchlistItems(watchlist_id=watchlist_id, symbol=symbol, name=name)
     db.add(item)
-    db.commit()
-    db.refresh(item)
-    return item
+    try:
+        db.commit()
+        db.refresh(item)
+        return item
+    except IntegrityError:
+        db.rollback()
+        raise WatchlistItemAlreadyExistsError(f"Symbol {symbol} already exists in watchlist {watchlist_id}")
 
 
 def remove_watchlist_item(db: Session, watchlist_id: int, symbol: str, user_id: int) -> None:
     _check_watchlist_ownership(db, watchlist_id, user_id)
 
-    db.query(WatchlistItems).filter(
+    result = db.query(WatchlistItems).filter(
         WatchlistItems.watchlist_id == watchlist_id,
         WatchlistItems.symbol == symbol,
     ).delete()
     db.commit()
+    if result == 0:
+        raise WatchlistItemNotFoundError(f"Symbol {symbol} not found in watchlist {watchlist_id}")
 
 
 def get_all_watched_symbols(db: Session) -> list[str]:
@@ -86,6 +110,8 @@ def get_all_watched_symbols(db: Session) -> list[str]:
 
 
 def create_watchlist(db: Session, user_id: int, name: str) -> Watchlists:
+    if db.query(Watchlists).filter(Watchlists.user_id == user_id, Watchlists.name == name).first():
+        raise WatchlistItemAlreadyExistsError(f"Watchlist with name '{name}' already exists")
     watchlist = Watchlists(user_id=user_id, name=name)
     db.add(watchlist)
     db.commit()
@@ -94,7 +120,8 @@ def create_watchlist(db: Session, user_id: int, name: str) -> Watchlists:
 
 
 def save_corporate_actions(db: Session, symbol: str, actions: list[dict]) -> None:
-    """批量 upsert 除权除息记录"""
+    """批量 upsert 除权除息记录。
+    注意：本函数不管理事务（不 commit），由调用方统一控制 session 生命周期。"""
     if not actions:
         return
     rows = [{"symbol": symbol, **action} for action in actions]
@@ -109,7 +136,6 @@ def save_corporate_actions(db: Session, symbol: str, actions: list[dict]) -> Non
         },
     )
     db.execute(stmt)
-    db.commit()
 
 
 def get_corporate_actions_from(db: Session, symbol: str) -> list[dict]:

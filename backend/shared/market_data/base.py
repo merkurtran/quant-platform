@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+from decimal import Decimal
+from datetime import date
+
 
 class MarketDataProvider(ABC):
     @abstractmethod
@@ -11,22 +14,31 @@ class MarketDataProvider(ABC):
                 "close": Decimal, "volume": Decimal, "amount": Decimal | None}, ...]
         按时间正序排列
         """
-
         pass
-
 
     @abstractmethod
-    def get_minute_kline(self, symbol: str, start_date: str) -> list[dict]:
-        """获取分钟线,period 取 '1m'/'5m'/'15m',返回格式同上"""
+    def get_minute_kline(self, symbol: str, start_date: str, period: str = "1m") -> list[dict]:
+        """
+        获取分钟线数据
+        symbol: "600519.SH"
+        start_date: "YYYYMMDD" 格式
+        period: "1m" / "5m" / "15m" / "30m" / "60m"
+        返回格式同 get_daily_kline
+        """
         pass
-
 
     @abstractmethod
     def get_all_symbols(self) -> list[str]:
         """获取全市场股票代码列表,带交易所后缀格式"""
         pass
 
-
     @abstractmethod
-    def get_corporate_actions(self):
+    def get_corporate_actions(self, symbol: str, start_date: date | None = None) -> list[dict]:
+        """
+        获取除权除息记录
+        symbol: "600519.SH"
+        start_date: 开始日期，不传则取全部
+        返回: [{"ex_date": date, "action_type": str, "cash_per_share": Decimal,
+                "stock_ratio": Decimal, "rights_price": Decimal, "rights_ratio": Decimal}, ...]
+        """
         pass
