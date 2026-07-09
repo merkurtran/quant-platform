@@ -1,8 +1,10 @@
 import json
 from datetime import timedelta, datetime
+from decimal import Decimal
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.services.alert_service import evaluate_all_active_rules
 from shared.db.session import SessionLocal
 from shared.logging_config import get_logger
 from app.models.market import Klines
@@ -10,8 +12,10 @@ from app.services.market_service import get_all_watched_symbols, save_corporate_
 from shared.redis_client import redis_client
 from shared.market_data.akshare_provider import AKShareProvider
 from shared.market_data.exceptions import MarketDataError
+from app.core.config import get_settings
 
 logger = get_logger("market_worker.fetcher")
+settings = get_settings()
 provider = AKShareProvider()
 
 
@@ -33,7 +37,8 @@ def _save_klines(rows: list[dict]) -> None:
     设计说明：每条 K 线不独立开启事务。同一只股票的一次拉取全部合并进一个
     INSERT ... ON CONFLICT DO UPDATE 语句，单次 db.commit()，已是最小事务粒度。
     ThreadPoolExecutor 并发模型下每个线程操作不同股票，独立 SessionLocal 避免了
-    跨线程 session 竞争，因此当前设计（每股票=一次事务）是最优的。"""
+    跨线程 session 竞争，因此当前设计（每股票=一次事务）是最优的。
+    """
     if not rows:
         return
     db = SessionLocal()
@@ -65,8 +70,44 @@ def _publish_quote(symbol: str, latest: dict) -> None:
             "ts": latest["ts"].isoformat() if hasattr(latest["ts"], "isoformat") else str(latest["ts"]),
         })
         redis_client.publish(f"quotes:{symbol}", message)
+        redis_client.set(
+            f"latest_price:{symbol}",
+            message,
+            ex=settings.redis.latest_price_cache_ttl_seconds,
+        )
     except Exception as e:
         logger.error(f"发布行情到 Redis 失败 {symbol}: {e}")
+
+
+def _check_alerts(symbol: str, latest_rows: list[dict]) -> None:
+    """存完K线之后,检查这支股票有没有预警规则被触发
+    当前挂在日线同步任务上,预警精度为"每日收盘后检查"。
+    分钟级实时预警(含去重收敛策略)留到 Phase 3 规划。"""
+    if not latest_rows:
+        return
+
+    current_price = Decimal(str(latest_rows[-1]["close"]))
+    earliest_ts = latest_rows[0]["ts"]
+
+    db = SessionLocal()
+    try:
+        prev = (
+            db.query(Klines.close)
+            .filter(
+                Klines.symbol == symbol,
+                Klines.period == "1d",
+                Klines.ts < earliest_ts,
+            )
+            .order_by(Klines.ts.desc())
+            .first()
+        )
+        previous_close = prev[0] if prev else None
+
+        evaluate_all_active_rules(db, symbol, current_price, previous_close)
+    except Exception as e:
+        logger.error(f"预警检查失败 {symbol}: {e}")
+    finally:
+        db.close()
 
 
 def fetch_daily_kline(symbol: str) -> None:
@@ -98,6 +139,7 @@ def fetch_daily_kline(symbol: str) -> None:
     rows = [{"symbol": normalized_symbol, "period": "1d", **r} for r in rows_raw]
     _save_klines(rows)
     _publish_quote(normalized_symbol, rows[-1])
+    _check_alerts(normalized_symbol, rows)
 
 
 _PERIOD_MINUTES = {"1m": 1, "5m": 5, "15m": 15}

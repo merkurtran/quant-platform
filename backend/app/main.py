@@ -9,6 +9,9 @@ from app.api.market import router as market_router
 from app.core.config import get_settings
 from app.core.middleware import ApiResponseMiddleware
 from app.ws.market_ws import router as market_ws_router
+from app.api.alerts import router as alerts_router
+from app.api.strategies import router as strategies_router
+from app.api.strategies import backtest_router
 from shared.db.session import engine
 from shared.logging_config import get_logger
 
@@ -50,6 +53,9 @@ app.add_middleware(ApiResponseMiddleware)
 app.include_router(auth_router)
 app.include_router(market_router)
 app.include_router(market_ws_router)
+app.include_router(alerts_router)
+app.include_router(strategies_router)
+app.include_router(backtest_router)
 
 @app.get("/health")
 def health_check():

@@ -30,7 +30,7 @@ def _check_watchlist_ownership(db: Session, watchlist_id: int, user_id: int) -> 
         raise WatchlistNotFoundError(f"Watchlist {watchlist_id} not found for user {user_id}")
     
 
-def get_klines(db: Session, symbol: str, period: str, limit: int = 300, start: str | None = None, end: str | None = None) -> list[Klines]:
+def get_klines(db: Session, symbol: str, period: str, limit: int | None = 300, start: str | None = None, end: str | None = None) -> list[Klines]:
     q = (
         db.query(Klines)
         .filter(Klines.symbol == symbol, Klines.period == period)
@@ -39,7 +39,10 @@ def get_klines(db: Session, symbol: str, period: str, limit: int = 300, start: s
         q = q.filter(Klines.ts >= start)
     if end:
         q = q.filter(Klines.ts <= end)
-    return q.order_by(Klines.ts.asc()).limit(limit).all()
+    if limit is not None:
+        return q.order_by(Klines.ts.asc()).limit(limit).all()
+    else:
+         return q.order_by(Klines.ts.asc()).all()
 
 
 def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int, adjust: AdjustMethod, start: str | None = None, end: str | None = None) -> list[dict]:

@@ -28,6 +28,7 @@ class RedisSettings(BaseModel):
     host: str = "localhost"
     port: int = 6379
     db: int = 0
+    latest_price_cache_ttl_seconds: int = 604800
     
     @property
     def url(self) -> str:
