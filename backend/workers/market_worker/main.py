@@ -1,5 +1,6 @@
 import concurrent.futures
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
 
@@ -8,6 +9,7 @@ from workers.market_worker.fetcher import (
     fetch_daily_kline,
     fetch_minute_kline,
     get_watchlist_symbols,
+    get_minute_kline_symbols,
     get_all_a_share_symbols,
     sync_corporate_actions
 )
@@ -42,7 +44,7 @@ def sync_daily_klines():
 def sync_minute_klines_by_period(period: str):
     if not _is_trading_time(datetime.now()):
         return
-    symbols = get_watchlist_symbols()
+    symbols = get_minute_kline_symbols()
     # 使用线程池并发拉取分钟线
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_to_symbol = {executor.submit(fetch_minute_kline, symbol, period): symbol for symbol in symbols}
@@ -68,7 +70,7 @@ def sync_all_corporate_actions():
 
 
 if __name__ == "__main__":
-    scheduler = BlockingScheduler()
+    scheduler = BlockingScheduler(timezone=ZoneInfo("Asia/Shanghai"))
     scheduler.add_job(sync_daily_klines, "cron", hour="15", minute="0")
     scheduler.add_job(sync_all_corporate_actions, "cron", day_of_week="sun", hour="16", minute="0")
     scheduler.add_job(lambda: sync_minute_klines_by_period("1m"), "cron", day_of_week="mon-fri", hour="9-15", minute="*/1")

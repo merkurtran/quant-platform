@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.deps import get_current_user
@@ -34,6 +34,8 @@ def create_alert(
         symbol=payload.symbol,
         condition=payload.condition,
         notify_channels=payload.notify_channels,
+        dedup_cooldown_minutes=payload.dedup_cooldown_minutes,
+        dedup_rearm_pct=payload.dedup_rearm_pct,
     )
     return AlertRulePublic.model_validate(rule)
 
@@ -64,9 +66,11 @@ def patch_alert(
             user_id=current_user.id,
             condition=payload.condition,
             status=payload.status,
+            dedup_cooldown_minutes=payload.dedup_cooldown_minutes,
+            dedup_rearm_pct=payload.dedup_rearm_pct,
         )
     except AlertRuleNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert rule not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Alert rule not found", status_code=404)
     return AlertRulePublic.model_validate(rule)
 
 
@@ -79,5 +83,5 @@ def list_alert_logs(
     try:
         logs = get_alert_logs(db, rule_id=rule_id, user_id=current_user.id)
     except AlertRuleNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Alert rule not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Alert rule not found", status_code=404)
     return [AlertLogPublic.model_validate(log) for log in logs]

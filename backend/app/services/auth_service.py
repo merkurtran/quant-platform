@@ -1,8 +1,12 @@
+import logging
+
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 
 from app.core.security import hash_password, verify_password, create_access_token
 from app.models.user import User
+
+logger = logging.getLogger(__name__)
 
 
 class EmailAlreadyExistsError(Exception):
@@ -17,19 +21,27 @@ class UserNotFoundError(Exception):
     pass
 
 def register_user(db: Session, email: str, password: str, nickname: str) -> User:
-    # 先快速检查，但最终由数据库唯一约束兜底
-    if db.query(User).filter(User.email == email).first():
-        raise EmailAlreadyExistsError("Email already exists")
+    """
+    注册用户：使用 ON CONFLICT (email) DO NOTHING 原子化防重。
+
+    相比先 SELECT 再 INSERT 的 check-then-act 模式，
+    INSERT ... ON CONFLICT 在数据库层面保证原子性，消除竞态窗口。
+    """
     hashed_password = hash_password(password)
-    user = User(email=email, password_hash=hashed_password, nickname=nickname)
-    db.add(user)
-    try:
-        db.commit()
-        db.refresh(user)
-        return user
-    except IntegrityError:
-        db.rollback()
+
+    stmt = (
+        pg_insert(User)
+        .values(email=email, password_hash=hashed_password, nickname=nickname)
+        .on_conflict_do_nothing(constraint_name="uq_users_email")
+        .returning(User)
+    )
+    result = db.execute(stmt).mappings().one_or_none()
+
+    if result is None:
         raise EmailAlreadyExistsError("Email already exists")
+
+    db.commit()
+    return result  # type: ignore[return-value]
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User:

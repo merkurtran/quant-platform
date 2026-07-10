@@ -4,7 +4,7 @@ from decimal import Decimal
 from sqlalchemy.orm import Session, joinedload
 
 from app.models.strategy import Strategies, BacktestRuns
-from shared.redis_client import redis_client
+from shared.redis_client import get_redis_client
 
 
 class StrategyNotFoundError(Exception):
@@ -114,7 +114,7 @@ def trigger_backtest(
     db.refresh(run)
 
     try:
-        redis_client.rpush("backtest_queue", str(run.id))
+        get_redis_client().rpush("backtest_queue", str(run.id))
     except Exception as e:
         run.status = "failed"
         run.error_message = f"任务入队失败: {e}"

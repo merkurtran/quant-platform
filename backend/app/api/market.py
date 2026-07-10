@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 from enum import Enum
 
@@ -57,7 +57,7 @@ def list_klines(
     try:
         items = get_klines_with_adjustment(db, symbol, period, limit, internal_method, start=start, end=end)
     except NotImplementedError as e:
-        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(e))
+        raise BizException(BizErrorCode.NOT_IMPLEMENTED, str(e), status_code=501)
     return KlineListResponse(
         symbol=symbol,
         period=period,
@@ -85,9 +85,9 @@ def add_item(
     try:
         item = add_watchlist_item(db, watchlist_id=watchlist_id, symbol=payload.symbol, name=payload.name, user_id=current_user.id)
     except WatchlistNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Watchlist not found", status_code=404)
     except WatchlistItemAlreadyExistsError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Symbol already exists in this watchlist")
+        raise BizException(BizErrorCode.ALREADY_EXISTS, "Symbol already exists in this watchlist", status_code=409)
     return WatchlistItemPublic.model_validate(item)
 
 
@@ -101,7 +101,7 @@ def remove_item(
     try:
         remove_watchlist_item(db, watchlist_id, symbol, user_id=current_user.id)
     except WatchlistNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Watchlist not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Watchlist not found", status_code=404)
     return {"code": 0, "message": "deleted"}
 
 
@@ -114,5 +114,5 @@ def create_watchlist_endpoint(
     try:
         watchlist = create_watchlist(db, user_id=current_user.id, name=payload.name)
     except WatchlistItemAlreadyExistsError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Watchlist with this name already exists")
+        raise BizException(BizErrorCode.ALREADY_EXISTS, "Watchlist with this name already exists", status_code=409)
     return WatchlistPublic.model_validate(watchlist)

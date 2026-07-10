@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import BizException, BizErrorCode
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.strategy import (
@@ -66,7 +67,7 @@ def get_one(
     try:
         strategy = get_strategy(db, strategy_id=strategy_id, user_id=current_user.id)
     except StrategyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Strategy not found", status_code=404)
     return StrategyDetail.model_validate(strategy)
 
 
@@ -88,7 +89,7 @@ def update(
             params=payload.params,
         )
     except StrategyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Strategy not found", status_code=404)
     return StrategyPublic.model_validate(strategy)
 
 
@@ -101,7 +102,7 @@ def delete(
     try:
         delete_strategy(db, strategy_id=strategy_id, user_id=current_user.id)
     except StrategyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Strategy not found", status_code=404)
 
 
 # ── 回测 ──
@@ -125,7 +126,7 @@ def start_backtest(
             params=payload.params,
         )
     except StrategyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strategy not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Strategy not found", status_code=404)
     return BacktestRunPublic(run_id=run.id, status=run.status)
 
 
@@ -138,7 +139,7 @@ def get_run_result(
     try:
         run = get_backtest_run(db, run_id=run_id, user_id=current_user.id)
     except StrategyNotFoundError:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Backtest run not found")
+        raise BizException(BizErrorCode.NOT_FOUND, "Backtest run not found", status_code=404)
 
     result_detail = None
     if run.results:

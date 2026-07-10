@@ -37,18 +37,24 @@ from app.services.market_service import get_klines_with_adjustment, AdjustMethod
 
 logger = logging.getLogger(__name__)
 
+# 回测 worker 配置从 app.core.config.BacktestWorkerSettings 读取，
+# 通过 .env 的 BACKTEST_WORKER__* 变量控制。
+
 
 # ==================== 平台相关的资源限制函数 ====================
 
 def _set_resource_limits():
     """
     设置操作系统级别的资源限制（仅 Linux/macOS 有效）
-    
+
     Windows 环境下：
     - 内存限制：无法实现（无等价API），依赖进程级超时兜底
     - CPU 超时：由 multiprocessing.Process.join(timeout) 提供
     - 已知限制：记录到日志，不阻塞执行
     """
+    from app.core.config import get_settings
+    cfg = get_settings().backtest_worker
+
     if IS_WINDOWS:
         logger.warning(
             "Windows 环境：无法设置 OS 级资源限制 (rlimit/signal.alrm)。"
@@ -57,19 +63,16 @@ def _set_resource_limits():
         )
         return
     
-    MAX_MEMORY_MB = 512
-    MAX_CPU_SECONDS = 300
-    
     try:
         # 内存限制 (字节)
         resource.setrlimit(
             resource.RLIMIT_AS,
-            (MAX_MEMORY_MB * 1024 * 1024, resource.RLIM_INFINITY)
+            (cfg.max_memory_mb * 1024 * 1024, resource.RLIM_INFINITY)
         )
         # CPU 时间限制 (秒)
         resource.setrlimit(
             resource.RLIMIT_CPU,
-            (MAX_CPU_SECONDS, MAX_CPU_SECONDS + 10)
+            (cfg.max_cpu_seconds, cfg.max_cpu_seconds + 10)
         )
         # 文件大小限制 (10MB)
         resource.setrlimit(
@@ -81,7 +84,7 @@ def _set_resource_limits():
             resource.RLIMIT_NPROC,
             (32, 32)
         )
-        logger.info(f"资源限制已设置: 内存={MAX_MEMORY_MB}MB, CPU={MAX_CPU_SECONDS}s")
+        logger.info(f"资源限制已设置: 内存={cfg.max_memory_mb}MB, CPU={cfg.max_cpu_seconds}s")
     except (ValueError, AttributeError) as e:
         logger.warning(f"设置资源限制失败: {e}")
 
@@ -155,7 +158,7 @@ class BacktestConfig:
             'symbol': self.symbol,
             'start_date': self.start_date,
             'end_date': self.end_date,
-            'initial_capital': float(self.initial_capital),
+            'initial_capital': str(self.initial_capital),
             'run_id': self.run_id,
             'commission': self.commission,
             'strategy_params': self.strategy_params,
@@ -527,7 +530,8 @@ def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
         
         # ==================== 第2步: 设置资源限制 ====================
         _set_resource_limits()
-        setup_timeout_handler(305)
+        from app.core.config import get_settings
+        setup_timeout_handler(get_settings().backtest_worker.worker_timeout_seconds)
         
         # ==================== 第3步: 加载用户策略类 ====================
         restricted_globals = build_restricted_globals(BaseStrategy)
@@ -770,7 +774,8 @@ def run_backtest(config: BacktestConfig) -> BacktestResult:
         process.start()
         
         # 等待子进程完成（比 worker 内部超时多 15 秒）
-        process.join(timeout=320)
+        from app.core.config import get_settings
+        process.join(timeout=get_settings().backtest_worker.process_join_timeout)
         
         # 检查子进程是否还在运行（超时）
         if process.is_alive():

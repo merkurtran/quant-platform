@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timezone
 
-from shared.redis_client import redis_client
+from shared.redis_client import get_redis_client
 from shared.db.session import SessionLocal
 from app.models.strategy import BacktestRuns, Strategies, BacktestResults
 from workers.strategy_worker.backtest_runner import BacktestConfig, run_backtest
@@ -109,7 +109,7 @@ if __name__ == "__main__":
     logger.info("策略调度器启动,监听队列 backtest_queue...")
     while True:
         try:
-            item = redis_client.blpop("backtest_queue", timeout=5)
+            item = get_redis_client().blpop("backtest_queue", timeout=5)
             if item is None:
                 continue
             _, run_id_str = item

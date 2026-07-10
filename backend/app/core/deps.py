@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from jose import JWTError
 
+from app.core.exceptions import BizException, BizErrorCode
 from app.core.security import decode_access_token
 from app.models.user import User
 from shared.db.session import get_db
@@ -20,23 +21,26 @@ def get_current_user(
         payload = decode_access_token(token)
         user_id = int(payload.get("sub"))
         if payload.get("type") != "access":
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token type",
+            raise BizException(
+                BizErrorCode.UNAUTHORIZED,
+                "Invalid token type",
+                status_code=401,
                 headers={"WWW-Authenticate": "Bearer"},
             )
     except (JWTError, ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
+        raise BizException(
+            BizErrorCode.UNAUTHORIZED,
+            "Could not validate credentials",
+            status_code=401,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
     try:
         return get_user_by_id(db, user_id)
     except UserNotFoundError:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User not found",
+        raise BizException(
+            BizErrorCode.UNAUTHORIZED,
+            "User not found",
+            status_code=401,
             headers={"WWW-Authenticate": "Bearer"},
         )

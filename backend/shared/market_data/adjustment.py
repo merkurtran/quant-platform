@@ -1,5 +1,6 @@
 from enum import Enum
 import bisect
+import warnings
 from decimal import Decimal 
 
 from shared.market_data.utils import _safe_decimal
@@ -67,26 +68,47 @@ def _apply_qfq_ratio(raw_klines: list[dict], segment_factors: list[Decimal], ex_
 
 def _apply_qfq_diff(raw_klines: list[dict], segment_factors: list[Decimal], ex_dates: list, original_klines: list[dict]) -> list[dict]:
     """
-    预留: 差值前复权
-    TODO: 实现
+    差值前复权 (预留接口，暂未实现)
+
+    .. deprecated::
+        此复权方式尚未实现，调用将触发 DeprecationWarning。
     """
-    raise NotImplementedError("差值前复权暂未实现")
+    warnings.warn(
+        "差值前复权(_apply_qfq_diff)暂未实现，将回退到比例前复权",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _apply_qfq_ratio(raw_klines, segment_factors, ex_dates)
 
 
 def _apply_hfq_ratio(raw_klines: list[dict], segment_factors: list[Decimal], ex_dates: list) -> list[dict]:
     """
-    预留: 比例后复权
-    TODO: 实现
+    比例后复权 (预留接口，暂未实现)
+
+    .. deprecated::
+        此复权方式尚未实现，调用将触发 DeprecationWarning。
     """
-    raise NotImplementedError("比例后复权暂未实现")
+    warnings.warn(
+        "比例后复权(_apply_hfq_ratio)暂未实现，返回原始K线数据",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return raw_klines
 
 
 def _apply_hfq_diff(raw_klines: list[dict], segment_factors: list[Decimal], ex_dates: list, original_klines: list[dict]) -> list[dict]:
     """
-    预留: 差值后复权
-    TODO: 实现
+    差值后复权 (预留接口，暂未实现)
+
+    .. deprecated::
+        此复权方式尚未实现，调用将触发 DeprecationWarning。
     """
-    raise NotImplementedError("差值后复权暂未实现")
+    warnings.warn(
+        "差值后复权(_apply_hfq_diff)暂未实现，返回原始K线数据",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return original_klines if original_klines else raw_klines
 
 
 def calculate_adjusted_prices(raw_klines: list[dict], corporate_actions: list[dict], method: AdjustMethod) -> list[dict]:

@@ -65,6 +65,8 @@ class LLMSettings(BaseModel):
     api_key: SecretStr
     model: str = "gpt-3.5-turbo"
     rate_limit_per_minute: int = 10
+    max_agent_rounds: int = 5
+    message_max_length: int = 4096
 
     @field_validator("api_key")
     @classmethod
@@ -76,6 +78,15 @@ class LLMSettings(BaseModel):
 
 class TradingSettings(BaseModel):
     enabled_default: bool = True
+    default_backtest_capital: int = 1_000_000
+
+
+class BacktestWorkerSettings(BaseModel):
+    """回测 worker 子进程资源限制与超时配置"""
+    max_memory_mb: int = 512              # 子进程最大内存 (MB)
+    max_cpu_seconds: int = 300            # 子进程最大 CPU 时间 (秒)，对应 SIGALRM
+    worker_timeout_seconds: int = 305     # worker 内部超时信号（比 cpu 超时多 5s 缓冲）
+    process_join_timeout: int = 320       # 主进程等待子进程退出超时（比 worker 超时多 15s）
 
 
 class Settings(BaseSettings):
@@ -100,9 +111,11 @@ class Settings(BaseSettings):
     encrypt: EncryptSettings
     llm: LLMSettings
     trading: TradingSettings = TradingSettings()
+    backtest_worker: BacktestWorkerSettings = BacktestWorkerSettings()
 
     cors_origins: list[str] = ["http://localhost:3000"]
     kline_fetch_interval_seconds: int = 3
+    default_page_size: int = 20
 
 
 @lru_cache

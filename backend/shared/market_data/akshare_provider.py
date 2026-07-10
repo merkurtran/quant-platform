@@ -16,6 +16,25 @@ class AKShareProvider(MarketDataProvider):
 
     _MINUTE_PERIOD_MAP = {"1m": "1", "5m": "5", "15m": "15"}
 
+    # AKShare 返回的中文列名 → 标准输出字段名映射
+    _KLINE_COLUMN_MAP = {
+        "日期": "ts",
+        "开盘": "open",
+        "最高": "high",
+        "最低": "low",
+        "收盘": "close",
+        "成交量": "volume",
+        "成交额": "amount",
+    }
+
+    def _df_to_kline_dicts(self, df: pd.DataFrame) -> list[dict]:
+        """将 AKShare 返回的 DataFrame 转换为标准 kline dict 列表。"""
+        col_map = self._KLINE_COLUMN_MAP
+        return [
+            {col_map[k]: (pd.to_datetime(v) if k == "日期" else v) for k, v in row.items()}
+            for _, row in df.iterrows()
+        ]
+
     def get_daily_kline(self, symbol: str, start_date: str) -> list[dict]:
         raw_symbol = symbol.split(".")[0]
 
@@ -28,18 +47,7 @@ class AKShareProvider(MarketDataProvider):
             return []
 
         try:
-            return [
-                {
-                    "ts": pd.to_datetime(row["日期"]),
-                    "open": row["开盘"],
-                    "high": row["最高"],
-                    "low": row["最低"],
-                    "close": row["收盘"],
-                    "volume": row["成交量"],
-                    "amount": row.get("成交额"),
-                }
-                for _, row in df.iterrows()
-            ]
+            return self._df_to_kline_dicts(df)
         except KeyError as e:
             raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
 
@@ -58,18 +66,7 @@ class AKShareProvider(MarketDataProvider):
             return []
 
         try:
-            return [
-                {
-                    "ts": pd.to_datetime(row["日期"]),
-                    "open": row["开盘"],
-                    "high": row["最高"],
-                    "low": row["最低"],
-                    "close": row["收盘"],
-                    "volume": row["成交量"],
-                    "amount": row.get("成交额"),
-                }
-                for _, row in df.iterrows()
-            ]
+            return self._df_to_kline_dicts(df)
         except KeyError as e:
             raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
 

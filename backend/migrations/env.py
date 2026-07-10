@@ -12,6 +12,7 @@ from app.models.user import User # noqa: F401 (后续新模型都需要在此处
 from app.models.market import Watchlists, WatchlistItems, Klines, CorporateActions  # noqa: F401
 from app.models.alert import AlertRules, AlertLogs # noqa: F401
 from app.models.strategy import Strategies, BacktestRuns, BacktestResults # noqa: F401
+from app.models.trading import BrokerAccount, Order, Position, PositionReconciliation, AuditLog, TradeOutbox  # noqa: F401
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config

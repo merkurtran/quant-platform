@@ -4,13 +4,32 @@
 
 **现状**：`_check_alerts` 挂在 `fetch_daily_kline` 末尾，每天收盘后触发一次。预警精度 = "按天检查收盘价"。
 
-**做分钟级/实时预警需独立解决的两个设计问题**：
+### 1a. ~~监控范围扩展~~ ✅ 已解决 (Phase 3)
 
-1. **同一规则的通知去重/收敛策略。** 分钟线更新频率下，同一支股票一天内可能多次穿越阈值（突破 1800 → 跌回 1795 → 再突破 1805），如果每条分钟线都触发，同一规则一天能炸几十条通知。需要一个去重策略："同一规则+同一交易日只触发一次"还是"每次穿越都报"——这是独立的产品决策，不应和调用点混着做。
+**原问题**：`fetch_minute_kline` 当前只拉自选股，但预警规则可能建在全市场任意股票上。
 
-2. **监控范围从自选股扩展到所有被预警规则引用的股票。** `fetch_minute_kline` 当前只拉自选股，但预警规则可能建在全市场任意股票上。如果预警检查挂在分钟线，非自选股的预警永远不会触发。全市场分钟线拉取的量级和成本需要单独评估。后续分钟线函数拉取需要扩展为自选股+所有带有预警规则的股票
+**解决方案 (Phase 3)**：新增 `get_minute_kline_symbols()` 函数，返回 **自选股 ∪ 带活跃预警规则的股票** 的去重并集。`sync_minute_klines_by_period()` 已改用此函数。分钟线拉取范围不再遗漏非自选股的预警标的。
 
-**结论**：分钟级预警 ≠ 把 `_check_alerts` 换到分钟线调用点就行。这两个问题都是独立的设计任务，留到 Phase 3 规划。
+### 1b. ~~通知去重/收敛策略~~ ✅ 已解决 (Phase 3)
+
+**原问题**：分钟级频率下，同一规则一天可能触发几十条通知。
+
+**解决方案 (Phase 3)**：实现 **Cooldown + Rearm 三态状态机**（`app/services/alert_engine.py`）：
+- `IDLE` → 首次触发 → 发通知 → `COOLDOWN`（冷却窗口，默认 30 分钟，可按规则自定义）
+- `COOLDOWN` 期内一律抑制重复通知
+- 冷却期满后若条件仍满足 → 进入 `ARMED`（等价格回落）
+- `ARMED` 状态下价格回落超过阈值（默认 2%）→ 重置回 `IDLE`
+
+新增文件：
+- `app/services/alert_engine.py` — 去重状态机引擎（纯逻辑，无 DB 依赖，易测试）
+- `app/services/alert_service.py` — 新增 `evaluate_and_notify()` 协调器函数
+
+修改文件：
+- `AlertRules` 模型新增 4 列：`last_triggered_at`, `last_triggered_price`, `dedup_cooldown_minutes`, `dedup_rearm_pct`
+- `CreateAlertRuleRequest` / `UpdateAlertRuleRequest` / `AlertRulePublic` Schema 新增去重字段
+- `fetcher.py` 的 `_check_alerts()` 改用 `evaluate_and_notify()`；`fetch_minute_kline()` 接入告警检查
+- API 层 (`alerts.py`) 透传新的去重参数
+- Alembic 迁移：`a3f7c2d1e8b0_add_alert_dedup_fields.py`
 
 ---
 

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 from jose import JWTError
 
+from app.core.exceptions import BizException, BizErrorCode
 from app.core.security import create_access_token, create_refresh_token, decode_refresh_token
 from app.core.config import get_settings
 from app.core.rate_limit import rate_limiter
@@ -26,7 +27,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db), _: None = 
     try:
         user = register_user(db, payload.email, payload.password, payload.nickname)
     except EmailAlreadyExistsError:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+        raise BizException(BizErrorCode.ALREADY_EXISTS, "Email already exists", status_code=409)
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)
     return TokenResponse(access_token=access_token, 
@@ -40,7 +41,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db), _: None = Depend
     try:
         user = authenticate_user(db, payload.email, payload.password)
     except InvalidCredentialsError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+        raise BizException(BizErrorCode.UNAUTHORIZED, "Invalid credentials", status_code=401)
     access_token = create_access_token(user.id)
     refresh_token = create_refresh_token(user.id)
     return TokenResponse(access_token=access_token, 
@@ -54,14 +55,22 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db), _: None
     try:
         token_payload = decode_refresh_token(payload.refresh_token)
     except JWTError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired refresh token")
+        raise BizException(
+            BizErrorCode.AUTH_TOKEN_EXPIRED,
+            "Invalid or expired refresh token",
+            status_code=401,
+        )
 
     user_id = int(token_payload.get("sub"))
 
     try:
         user = get_user_by_id(db, user_id)
     except UserNotFoundError:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+        raise BizException(
+            BizErrorCode.NOT_FOUND,
+            "User not found",
+            status_code=401,
+        )
 
     new_access_token = create_access_token(user.id)
     new_refresh_token = create_refresh_token(user.id)

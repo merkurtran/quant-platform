@@ -1,15 +1,15 @@
 import json
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from app.services.alert_service import evaluate_all_active_rules
+from app.services.alert_service import evaluate_and_notify
 from shared.db.session import SessionLocal
 from shared.logging_config import get_logger
 from app.models.market import Klines
 from app.services.market_service import get_all_watched_symbols, save_corporate_actions
-from shared.redis_client import redis_client
+from shared.redis_client import get_redis_client
 from shared.market_data.akshare_provider import AKShareProvider
 from shared.market_data.exceptions import MarketDataError
 from app.core.config import get_settings
@@ -18,17 +18,26 @@ logger = get_logger("market_worker.fetcher")
 settings = get_settings()
 provider = AKShareProvider()
 
+# A 股交易所前缀映射表（首位数字 → 交易所后缀）
+# 扩展新交易所只需在此处添加一行
+EXCHANGE_PREFIX_MAP: dict[str, str] = {
+    "6": "SH",   # 上海主板
+    "0": "SZ",   # 深圳主板
+    "3": "SZ",   # 创业板
+    "4": "BJ",   # 北交所
+    "8": "BJ",   # 北交所（两网/退市）
+}
+
 
 def normalize_symbol(raw_symbol: str) -> str:
     """把 AKShare 的纯数字代码转成带交易所后缀格式"""
-    if raw_symbol.startswith("6"):
-        return f"{raw_symbol}.SH"
-    elif raw_symbol.startswith(("0", "3")):
-        return f"{raw_symbol}.SZ"
-    elif raw_symbol.startswith(("4", "8")):
-        return f"{raw_symbol}.BJ"
-    else:
-        raise ValueError(f"Unknown exchange for symbol: {raw_symbol}")
+    if not raw_symbol.isdigit():
+        raise ValueError(f"Invalid A-share code (expected digits): {raw_symbol!r}")
+    prefix = raw_symbol[0]
+    suffix = EXCHANGE_PREFIX_MAP.get(prefix)
+    if suffix is None:
+        raise ValueError(f"Unknown exchange for symbol {raw_symbol!r}: prefix '{prefix}' not in {list(EXCHANGE_PREFIX_MAP.keys())}")
+    return f"{raw_symbol}.{suffix}"
 
 
 def _save_klines(rows: list[dict]) -> None:
@@ -69,8 +78,9 @@ def _publish_quote(symbol: str, latest: dict) -> None:
             "price": float(latest["close"]),
             "ts": latest["ts"].isoformat() if hasattr(latest["ts"], "isoformat") else str(latest["ts"]),
         })
-        redis_client.publish(f"quotes:{symbol}", message)
-        redis_client.set(
+        _rc = get_redis_client()
+        _rc.publish(f"quotes:{symbol}", message)
+        _rc.set(
             f"latest_price:{symbol}",
             message,
             ex=settings.redis.latest_price_cache_ttl_seconds,
@@ -80,9 +90,9 @@ def _publish_quote(symbol: str, latest: dict) -> None:
 
 
 def _check_alerts(symbol: str, latest_rows: list[dict]) -> None:
-    """存完K线之后,检查这支股票有没有预警规则被触发
-    当前挂在日线同步任务上,预警精度为"每日收盘后检查"。
-    分钟级实时预警(含去重收敛策略)留到 Phase 3 规划。"""
+    """存完K线之后,检查这支股票有没有预警规则被触发(含去重)。
+    日线和分钟线共用此函数，分钟线场景下 previous_close 可能为 None。
+    """
     if not latest_rows:
         return
 
@@ -91,6 +101,7 @@ def _check_alerts(symbol: str, latest_rows: list[dict]) -> None:
 
     db = SessionLocal()
     try:
+        # previous_close 仅在日线场景有明确意义，分钟线可能查不到
         prev = (
             db.query(Klines.close)
             .filter(
@@ -103,7 +114,7 @@ def _check_alerts(symbol: str, latest_rows: list[dict]) -> None:
         )
         previous_close = prev[0] if prev else None
 
-        evaluate_all_active_rules(db, symbol, current_price, previous_close)
+        evaluate_and_notify(db, symbol, current_price, previous_close)
     except Exception as e:
         logger.error(f"预警检查失败 {symbol}: {e}")
     finally:
@@ -145,7 +156,9 @@ def fetch_daily_kline(symbol: str) -> None:
 _PERIOD_MINUTES = {"1m": 1, "5m": 5, "15m": 15}
 
 def fetch_minute_kline(symbol: str, period: str) -> None:
-    """拉取分钟线,period 取 '1m'/'5m'/'15m', 仅拉取自选股, 分线只能回溯近5个交易日"""
+    """拉取分钟线,period 取 '1m'/'5m'/'15m', 分线只能回溯近5个交易日
+    拉取范围由 get_minute_kline_symbols() 决定: 自选股 + 带活跃预警规则的股票
+    """
     normalized_symbol = normalize_symbol(symbol)
 
     db = SessionLocal()
@@ -166,7 +179,8 @@ def fetch_minute_kline(symbol: str, period: str) -> None:
         step_minutes = _PERIOD_MINUTES.get(period, 1)
         start_dt = latest[0] + timedelta(minutes=step_minutes)
     else:
-        start_dt = datetime.now() - timedelta(days=5)
+        # 首次拉取回溯 7 天（覆盖完整交易周，避免跨周末数据缺失）
+        start_dt = datetime.now(timezone.utc).astimezone() - timedelta(days=7)
     start_date = start_dt.strftime("%Y-%m-%d %H:%M:%S")
 
     try:
@@ -180,6 +194,8 @@ def fetch_minute_kline(symbol: str, period: str) -> None:
 
     rows = [{"symbol": normalized_symbol, "period": period, **r} for r in rows_raw]
     _save_klines(rows)
+    _publish_quote(normalized_symbol, rows[-1])
+    _check_alerts(normalized_symbol, rows)
 
 
 def get_watchlist_symbols() -> list[str]:
@@ -190,6 +206,30 @@ def get_watchlist_symbols() -> list[str]:
         return [symbol.split(".")[0] for symbol in symbols]
     finally:
         db.close()
+
+
+def get_alert_rule_symbols() -> list[str]:
+    """查询所有活跃预警规则关联的股票代码去重列表,转成 akshare 需要的纯数字代码"""
+    from app.models.alert import AlertRules
+
+    db = SessionLocal()
+    try:
+        rows = (
+            db.query(AlertRules.symbol)
+            .filter(AlertRules.status == "active")
+            .distinct()
+            .all()
+        )
+        return [row[0].split(".")[0] for row in rows if row[0]]
+    finally:
+        db.close()
+
+
+def get_minute_kline_symbols() -> list[str]:
+    """分钟线拉取范围：自选股 + 带活跃预警规则的股票,去重"""
+    watchlist = set(get_watchlist_symbols())
+    alert_symbols = set(get_alert_rule_symbols())
+    return sorted(watchlist | alert_symbols)
 
 
 def get_all_a_share_symbols() -> list[str]:

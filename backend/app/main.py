@@ -1,17 +1,23 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from contextlib import asynccontextmanager
+from uuid import uuid4
 import asyncio
 
 from app.api.auth import router as auth_router
 from app.api.market import router as market_router
 from app.core.config import get_settings
+from app.core.exceptions import BizException
 from app.core.middleware import ApiResponseMiddleware
 from app.ws.market_ws import router as market_ws_router
 from app.api.alerts import router as alerts_router
 from app.api.strategies import router as strategies_router
 from app.api.strategies import backtest_router
+from app.api.trading import router as trading_router
+from app.api.ai import router as ai_router
+from app.ai.llm_client import LLMClient
 from shared.db.session import engine
 from shared.logging_config import get_logger
 
@@ -37,6 +43,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Hypertable 初始化跳过（可能 TimescaleDB 未安装）: {e}")
     yield
+    # 关闭 LLM 共享连接池
+    await LLMClient.close_shared_client()
 
 
 app = FastAPI(title=settings.app_name, debug=settings.debug, lifespan=lifespan)
@@ -56,6 +64,23 @@ app.include_router(market_ws_router)
 app.include_router(alerts_router)
 app.include_router(strategies_router)
 app.include_router(backtest_router)
+app.include_router(trading_router)
+app.include_router(ai_router)
+
+
+@app.exception_handler(BizException)
+async def biz_exception_handler(request: Request, exc: BizException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "code": exc.code.value,
+            "message": exc.message,
+            "data": exc.data,
+            "request_id": str(uuid4()),
+        },
+        headers=exc.headers,
+    )
+
 
 @app.get("/health")
 def health_check():

@@ -64,12 +64,16 @@ class CreateAlertRuleRequest(BaseModel):
     symbol: str
     condition: AlertConditionUnion
     notify_channels: list[str] = ["inapp"]
+    dedup_cooldown_minutes: int | None = Field(default=None, ge=1, le=1440)
+    dedup_rearm_pct: Decimal | None = Field(default=None, ge=Decimal("0.1"), le=Decimal("10.0"))
 
 
 class UpdateAlertRuleRequest(BaseModel):
-    """只允许改condition和status,不允许改symbol/rule_type——换股票或换类型应该是删了重建,不是"改" """
+    """只允许改condition/status/dedup参数,不允许改symbol/rule_type——换股票或换类型应该是删了重建"""
     condition: AlertConditionUnion | None = None
     status: Literal["active", "paused"] | None = None
+    dedup_cooldown_minutes: int | None = Field(default=None, ge=1, le=1440)
+    dedup_rearm_pct: Decimal | None = Field(default=None, ge=Decimal("0.1"), le=Decimal("10.0"))
 
 
 class AlertRulePublic(BaseModel):
@@ -80,6 +84,11 @@ class AlertRulePublic(BaseModel):
     notify_channels: list[str]
     status: str
     created_at: datetime
+    # 去重状态机字段
+    last_triggered_at: datetime | None = None
+    last_triggered_price: Decimal | None = None
+    dedup_cooldown_minutes: int | None = None
+    dedup_rearm_pct: Decimal | None = None
 
     model_config = {"from_attributes": True}
 
