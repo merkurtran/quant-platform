@@ -1,5 +1,6 @@
 """全局 pytest fixtures：共享的 mock 对象和辅助工具"""
 from unittest.mock import MagicMock, patch
+from datetime import datetime, timezone
 
 import pytest
 from decimal import Decimal
@@ -18,12 +19,21 @@ def now():
     return FIXED_NOW
 
 
+# @pytest.fixture()
+# def fake_redis():
+#     """Mock Redis 同步客户端"""
+#     rc = MagicMock()
+#     return rc
+
+
 @pytest.fixture()
 def fake_redis():
     """Mock Redis 同步客户端"""
-    rc = MagicMock()
+    from asyncio import Future
+    rc = MagicMock(spec=None) 
+    rc.publish.return_value = Future()
+    rc.publish.return_value.set_result(0)
     return rc
-
 
 @pytest.fixture()
 def fake_async_session():
@@ -39,7 +49,7 @@ def make_alert_rule(
     rule_type: str = "price_above",
     condition: dict | None = None,
     status: str = "active",
-    last_triggered_at: __import__("datetime").datetime | None = None,
+    last_triggered_at: datetime | None = None,
     last_triggered_price: Decimal | None = None,
     dedup_cooldown_minutes: int | None = None,
     dedup_rearm_pct: Decimal | None = None,
