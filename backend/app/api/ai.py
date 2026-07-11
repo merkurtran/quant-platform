@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from app.core.exceptions import BizException, BizErrorCode
+from app.core.config import get_settings
+from app.core.rate_limiter import rate_limiter
 from app.core.deps import get_current_user, get_async_db
 from app.schemas.ai import (
     ConversationCreate,

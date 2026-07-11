@@ -57,12 +57,9 @@ def upgrade() -> None:
     op.create_index(op.f('ix_watchlist_items_watchlist_id'), 'watchlist_items', ['watchlist_id'], unique=False)
     op.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
     # 将普通表转换为 TimescaleDB 超表，实现按时间自动分区。
-    # 如果不转换，随着 K 线数据量增长，查询性能会急剧下降。
     op.execute("SELECT create_hypertable('klines', 'ts')")
     # 创建复合索引，覆盖最常见的查询模式：查某交易对某周期的历史 K 线。
-    # 虽然超表已经按 ts 分区，但分区只负责粗粒度的时间过滤，
-    # 索引负责精确定位到具体的 symbol 和 period，两者互补。
-    op.execute("CREATE INDEX idx_klines_symbol_period ON klines (symbol, period, ts DESC)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_klines_symbol_period ON klines (symbol, period, ts DESC)")
     # ### end Alembic commands ###
 
 

@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import BizException, BizErrorCode
 from app.core.deps import get_current_user
 from app.models.user import User
 from app.schemas.alert import (

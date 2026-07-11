@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import get_settings
 from app.ai.llm_client import LLMClient
 from app.ai.tools import TOOL_DEFINITIONS, execute_tool
 from app.ai.prompts.market_phase import build_phase_guard_prompt

@@ -1,29 +1,26 @@
 import asyncio
-import os
 from typing import Optional
 
 import httpx
 
-# 供应商配置表，后续切换只需改环境变量 LLM_PROVIDER + 对应 API_KEY
+from app.core.config import get_settings
+
+# 供应商配置表
 PROVIDER_CONFIG = {
     "openai": {
         "base_url": "https://api.openai.com/v1",
-        "api_key_env": "OPENAI_API_KEY",
         "default_model": "gpt-4o",
     },
     "claude": {
         "base_url": "https://api.anthropic.com/v1",
-        "api_key_env": "ANTHROPIC_API_KEY",
         "default_model": "claude-sonnet-4-20250514",
     },
     "deepseek": {
         "base_url": "https://api.deepseek.com/v1",
-        "api_key_env": "DEEPSEEK_API_KEY",
         "default_model": "deepseek-chat",
     },
     "custom": {
         "base_url": "",
-        "api_key_env": "LLM_API_KEY",
         "default_model": "",
     },
 }
@@ -36,12 +33,13 @@ class LLMClient:
     _client_lock = asyncio.Lock()
 
     def __init__(self):
-        provider = os.getenv("LLM_PROVIDER", "deepseek")
+        settings = get_settings()
+        provider = settings.llm.provider
         cfg = PROVIDER_CONFIG.get(provider, PROVIDER_CONFIG["deepseek"])
-        self._base_url = os.getenv("LLM_BASE_URL", cfg["base_url"])
-        self._api_key = os.getenv(cfg["api_key_env"], os.getenv("LLM_API_KEY", ""))
-        self._model = os.getenv("LLM_MODEL", cfg["default_model"])
-        self._timeout = int(os.getenv("LLM_TIMEOUT", "60"))
+        self._base_url = cfg["base_url"]
+        self._api_key = settings.llm.api_key.get_secret_value()
+        self._model = settings.llm.model
+        self._timeout = 60
 
     @classmethod
     async def _get_client(cls, timeout: int = 60) -> httpx.AsyncClient:

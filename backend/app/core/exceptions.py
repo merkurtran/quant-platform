@@ -5,6 +5,7 @@ from typing import Any
 class BizErrorCode(IntEnum):
     # 通用
     UNKNOWN = 10000
+    NOT_IMPLEMENTED = 10004
 
     # 认证/授权 10xxx
     UNAUTHORIZED = 10001

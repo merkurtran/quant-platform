@@ -56,7 +56,7 @@ def refresh(payload: RefreshTokenRequest, db: Session = Depends(get_db), _: None
         token_payload = decode_refresh_token(payload.refresh_token)
     except JWTError:
         raise BizException(
-            BizErrorCode.AUTH_TOKEN_EXPIRED,
+            BizErrorCode.TOKEN_EXPIRED,
             "Invalid or expired refresh token",
             status_code=401,
         )

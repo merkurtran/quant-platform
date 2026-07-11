@@ -95,7 +95,7 @@ class AuditLog(Base):
     conversation_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True) # actor_type=ai_agent 时关联对应会话
     target_type: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
     target_id: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
-    detail: Mapped[Optional[dict]] = mapped_column(type_=None, nullable=True)  # JSONB via SA 2.0
+    detail: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

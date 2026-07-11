@@ -32,16 +32,17 @@ def register_user(db: Session, email: str, password: str, nickname: str) -> User
     stmt = (
         pg_insert(User)
         .values(email=email, password_hash=hashed_password, nickname=nickname)
-        .on_conflict_do_nothing(constraint_name="uq_users_email")
-        .returning(User)
+        .on_conflict_do_nothing(index_elements=["email"])
+        .returning(User.id)
     )
-    result = db.execute(stmt).mappings().one_or_none()
+    user_id = db.execute(stmt).scalar_one_or_none()
 
-    if result is None:
+    if user_id is None:
         raise EmailAlreadyExistsError("Email already exists")
 
     db.commit()
-    return result  # type: ignore[return-value]
+    user = db.query(User).filter(User.id == user_id).one()
+    return user
 
 
 def authenticate_user(db: Session, email: str, password: str) -> User:

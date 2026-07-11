@@ -38,6 +38,6 @@ def get_async_redis_client() -> redis_asyncio.Redis:
             decode_responses=True,
             socket_keepalive=True,
             retry_on_timeout=True,
-            health_check_interval=30,
+            max_connections=20,
         )
     return _async_redis_client

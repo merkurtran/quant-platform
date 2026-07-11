@@ -6,7 +6,7 @@ from jose import JWTError
 from app.core.exceptions import BizException, BizErrorCode
 from app.core.security import decode_access_token
 from app.models.user import User
-from shared.db.session import get_db
+from shared.db.session import get_db, get_async_db
 from app.services.auth_service import get_user_by_id, UserNotFoundError
 
 security = HTTPBearer()

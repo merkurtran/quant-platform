@@ -44,7 +44,7 @@ def create_alert_rule(
         user_id=user_id,
         symbol=symbol,
         rule_type=condition.rule_type,
-        condition=condition.model_dump(),
+        condition=condition.model_dump(mode="json"),
         notify_channels=notify_channels,
         baseline_price=baseline_price,
         dedup_cooldown_minutes=dedup_cooldown_minutes,
@@ -75,7 +75,7 @@ def update_alert_rule(
 ) -> AlertRules:
     rule = _check_rule_ownership(db, rule_id, user_id)
     if condition is not None:
-        rule.condition = condition.model_dump()
+        rule.condition = condition.model_dump(mode="json")
     if status is not None:
         rule.status = status
     if dedup_cooldown_minutes is not None:

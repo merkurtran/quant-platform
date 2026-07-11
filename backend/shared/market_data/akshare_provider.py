@@ -31,7 +31,7 @@ class AKShareProvider(MarketDataProvider):
         """将 AKShare 返回的 DataFrame 转换为标准 kline dict 列表。"""
         col_map = self._KLINE_COLUMN_MAP
         return [
-            {col_map[k]: (pd.to_datetime(v) if k == "日期" else v) for k, v in row.items()}
+            {col_map[k]: (pd.to_datetime(v) if k == "日期" else v) for k, v in row.items() if k in col_map}
             for _, row in df.iterrows()
         ]
 
@@ -78,7 +78,7 @@ class AKShareProvider(MarketDataProvider):
         return df["代码"].tolist()
     
 
-    def get_corporate_actions(self, symbol: str) -> list[dict]:
+    def get_corporate_actions(self, symbol: str, start_date=None) -> list[dict]:
         raw_symbol = symbol.split(".")[0]
         results = []
         # 分红/送股/转增

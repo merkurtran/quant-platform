@@ -10,13 +10,13 @@ from shared.logging_config import get_logger
 from app.models.market import Klines
 from app.services.market_service import get_all_watched_symbols, save_corporate_actions
 from shared.redis_client import get_redis_client
-from shared.market_data.akshare_provider import AKShareProvider
+from shared.market_data.fallback_provider import create_default_provider
 from shared.market_data.exceptions import MarketDataError
 from app.core.config import get_settings
 
 logger = get_logger("market_worker.fetcher")
 settings = get_settings()
-provider = AKShareProvider()
+provider = create_default_provider()
 
 # A 股交易所前缀映射表（首位数字 → 交易所后缀）
 # 扩展新交易所只需在此处添加一行
