@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/layout/empty-state";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { AIMessage, Conversation } from "@/types";
 
 export default function AIPage() {
@@ -35,6 +36,11 @@ export default function AIPage() {
     () => [...(messages ?? []), ...extraMessages],
     [messages, extraMessages]
   );
+
+  // 切换对话时清理本地追加的消息，避免跨对话残留
+  useEffect(() => {
+    setExtraMessages([]);
+  }, [activeId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -76,6 +82,7 @@ export default function AIPage() {
     },
     onError: () => {
       setSending(false);
+      toast.error("消息发送失败，请重试");
     },
     onSettled: () => {
       setSending(false);

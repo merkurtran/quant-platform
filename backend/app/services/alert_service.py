@@ -92,6 +92,12 @@ def get_alert_logs(db: Session, rule_id: int, user_id: int) -> list[AlertLogs]:
     return rule.logs
 
 
+def delete_alert_rule(db: Session, rule_id: int, user_id: int) -> None:
+    rule = _check_rule_ownership(db, rule_id, user_id)
+    db.delete(rule)
+    db.commit()
+
+
 def check_condition_triggered(
     condition: AlertConditionUnion,
     current_price: Decimal,

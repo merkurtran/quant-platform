@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { Bell, Plus, Pause, Play, ScrollText } from "lucide-react";
+import { Bell, Plus, Pause, Play, ScrollText, Trash2 } from "lucide-react";
 import { alertService } from "@/services/alerts";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,16 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { EmptyState } from "@/components/layout/empty-state";
 import { TableSkeleton } from "@/components/layout/loading-skeleton";
 import {
@@ -45,6 +55,8 @@ export default function AlertsPage() {
   const [value, setValue] = useState("");
   const [cooldown, setCooldown] = useState("");
   const [rearm, setRearm] = useState("");
+  const [indicatorName, setIndicatorName] = useState("rsi");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: rules, isLoading } = useQuery({
     queryKey: ["alerts", statusFilter],
@@ -63,6 +75,16 @@ export default function AlertsPage() {
         condition.operator = "gt";
         condition.value = value;
         condition.baseline = "previous_close";
+      } else if (ruleType === "volume_spike") {
+        condition.operator = "gt";
+        condition.value = value;
+        condition.baseline = "previous_close";
+      } else if (ruleType === "indicator") {
+        condition.params = {
+          indicator: indicatorName,
+          operator: "gt",
+          value: parseFloat(value),
+        };
       }
       return alertService.create({
         symbol,
@@ -79,6 +101,7 @@ export default function AlertsPage() {
       setValue("");
       setCooldown("");
       setRearm("");
+      setIndicatorName("rsi");
       toast.success("创建成功");
     },
   });
@@ -88,6 +111,15 @@ export default function AlertsPage() {
       alertService.update(id, { status }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["alerts"] });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => alertService.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["alerts"] });
+      setDeleteId(null);
+      toast.success("已删除");
     },
   });
 
@@ -202,6 +234,14 @@ export default function AlertsPage() {
                       <ScrollText className="h-4 w-4" /> 日志
                     </Link>
                   </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="ml-auto text-danger hover:text-danger"
+                    onClick={() => setDeleteId(r.id)}
+                  >
+                    <Trash2 className="h-4 w-4" /> 删除
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -238,19 +278,46 @@ export default function AlertsPage() {
                     <SelectItem value="price_above">价格上穿</SelectItem>
                     <SelectItem value="price_below">价格下穿</SelectItem>
                     <SelectItem value="pct_change">涨跌幅</SelectItem>
+                    <SelectItem value="volume_spike">量异动</SelectItem>
+                    <SelectItem value="indicator">指标触发</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
+            {ruleType === "indicator" && (
+              <div className="space-y-1.5">
+                <Label>指标名称 *</Label>
+                <Input
+                  value={indicatorName}
+                  onChange={(e) => setIndicatorName(e.target.value)}
+                  placeholder="rsi / macd / kdj"
+                />
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>
-                {ruleType === "pct_change" ? "涨跌幅阈值（%）" : "价格阈值"} *
+                {ruleType === "pct_change"
+                  ? "涨跌幅阈值（%）"
+                  : ruleType === "volume_spike"
+                  ? "成交量倍数（倍）"
+                  : ruleType === "indicator"
+                  ? "指标阈值"
+                  : "价格阈值"}{" "}
+                *
               </Label>
               <Input
                 type="number"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                placeholder={ruleType === "pct_change" ? "5.0" : "1700"}
+                placeholder={
+                  ruleType === "pct_change"
+                    ? "5.0"
+                    : ruleType === "volume_spike"
+                    ? "2.0"
+                    : ruleType === "indicator"
+                    ? "70"
+                    : "1700"
+                }
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -284,6 +351,28 @@ export default function AlertsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除该告警规则？</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后无法恢复，相关触发日志也会被清除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+            >
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

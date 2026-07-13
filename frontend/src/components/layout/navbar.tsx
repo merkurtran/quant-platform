@@ -17,6 +17,16 @@ import {
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const NAV = [
   { href: "/market", label: "行情", icon: CandlestickChart },
@@ -38,6 +48,7 @@ export function Navbar() {
   const { user, logout } = useAuthStore();
   const [tradingOpen, setTradingOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [logoutOpen, setLogoutOpen] = useState(false);
   const tradingRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
 
@@ -56,6 +67,7 @@ export function Navbar() {
 
   const handleLogout = () => {
     logout();
+    setLogoutOpen(false);
     toast.success("已退出登录");
     router.push("/login");
   };
@@ -156,7 +168,10 @@ export function Navbar() {
             </div>
             <div className="my-1 h-px bg-border" />
             <button
-              onClick={handleLogout}
+              onClick={() => {
+                setUserOpen(false);
+                setLogoutOpen(true);
+              }}
               className="flex w-full items-center rounded-md px-3 py-1.5 text-sm text-danger transition-colors hover:bg-secondary"
             >
               <LogOut className="mr-2 h-4 w-4" />
@@ -165,6 +180,21 @@ export function Navbar() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认退出登录？</AlertDialogTitle>
+            <AlertDialogDescription>
+              退出后需要重新登录才能使用平台功能。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleLogout}>确认退出</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </header>
   );
 }

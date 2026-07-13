@@ -25,4 +25,6 @@ export const alertService = {
 
   getLogs: (ruleId: number) =>
     api.get<AlertLog[]>(`/alerts/${ruleId}/logs`).then((r) => r.data),
+
+  delete: (ruleId: number) => api.delete(`/alerts/${ruleId}`),
 };

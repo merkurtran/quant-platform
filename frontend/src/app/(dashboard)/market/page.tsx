@@ -6,7 +6,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus,
   Search,
-  MoreHorizontal,
   Maximize2,
   Minimize2,
   Sun,
@@ -40,14 +39,14 @@ import { toast } from "sonner";
 import type { Watchlist } from "@/types";
 
 const QUICK_PERIODS = [
+  { value: "1m", label: "1m" },
+  { value: "5m", label: "5m" },
+  { value: "15m", label: "15m" },
+  { value: "30m", label: "30m" },
+  { value: "60m", label: "60m" },
   { value: "1d", label: "1D" },
-  { value: "5d", label: "5D" },
-  { value: "1m", label: "1M" },
-  { value: "3m", label: "3M" },
-  { value: "6m", label: "6M" },
-  { value: "1y", label: "1Y" },
-  { value: "5y", label: "5Y" },
-  { value: "all", label: "All" },
+  { value: "1w", label: "1W" },
+  { value: "1M", label: "1M" },
 ];
 
 export default function MarketPage() {
@@ -60,6 +59,7 @@ export default function MarketPage() {
   const [period, setPeriod] = useState("1d");
   const [adjust, setAdjust] = useState("qfq");
   const [livePrice, setLivePrice] = useState<number | null>(null);
+  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const [fullscreen, setFullscreen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
 
@@ -105,11 +105,24 @@ export default function MarketPage() {
     enabled: !!symbol,
   });
 
-  useMarketSocket({
+  const { subscribe } = useMarketSocket({
     onQuote: (msg) => {
+      setLivePrices((prev) => ({ ...prev, [msg.symbol]: msg.price }));
       if (msg.symbol === symbol) setLivePrice(msg.price);
     },
   });
+
+  // 订阅当前选中股票的实时行情
+  useEffect(() => {
+    if (symbol) subscribe([symbol]);
+  }, [symbol, subscribe]);
+
+  // 订阅自选股列表中所有股票的实时行情
+  useEffect(() => {
+    if (currentList?.items.length) {
+      subscribe(currentList.items.map((item) => item.symbol));
+    }
+  }, [currentList, subscribe]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -357,9 +370,6 @@ export default function MarketPage() {
                 >
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-6 w-6">
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </Button>
               </div>
             </div>
 
@@ -430,7 +440,9 @@ export default function MarketPage() {
                         </div>
                       </div>
                       <div className="col-span-3 text-right tabular-nums text-muted-foreground">
-                        --
+                        {livePrices[item.symbol] != null
+                          ? formatPrice(livePrices[item.symbol])
+                          : "--"}
                       </div>
                       <div className="col-span-3 text-right tabular-nums text-muted-foreground">
                         --

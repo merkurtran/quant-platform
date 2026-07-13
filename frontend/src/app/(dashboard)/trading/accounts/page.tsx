@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { CreditCard, Plus } from "lucide-react";
+import { CreditCard, Plus, Trash2 } from "lucide-react";
 import { tradingService } from "@/services/trading";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,23 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/empty-state";
 import { TableSkeleton } from "@/components/layout/loading-skeleton";
 import { formatDate } from "@/lib/format";
@@ -26,6 +43,7 @@ export default function AccountsPage() {
   const [open, setOpen] = useState(false);
   const [alias, setAlias] = useState("");
   const [brokerType, setBrokerType] = useState("mock");
+  const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ["broker-accounts"],
@@ -40,6 +58,15 @@ export default function AccountsPage() {
       setOpen(false);
       setAlias("");
       toast.success("创建成功");
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => tradingService.deleteAccount(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["broker-accounts"] });
+      setDeleteId(null);
+      toast.success("已删除");
     },
   });
 
@@ -90,6 +117,16 @@ export default function AccountsPage() {
                 <p className="mt-3 text-xs text-muted-foreground tabular-nums">
                   创建于 {formatDate(a.created_at)}
                 </p>
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-danger hover:text-danger"
+                    onClick={() => setDeleteId(a.id)}
+                  >
+                    <Trash2 className="h-4 w-4" /> 删除
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -112,13 +149,15 @@ export default function AccountsPage() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="broker">券商类型</Label>
-              <Input
-                id="broker"
-                value={brokerType}
-                onChange={(e) => setBrokerType(e.target.value)}
-                placeholder="mock"
-              />
+              <Label>券商类型</Label>
+              <Select value={brokerType} onValueChange={setBrokerType}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="mock">mock（模拟）</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
@@ -131,6 +170,28 @@ export default function AccountsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={deleteId !== null}
+        onOpenChange={(open) => !open && setDeleteId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除该券商账户？</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后无法恢复，该账户下的持仓和未完成订单可能受到影响。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteId && deleteMutation.mutate(deleteId)}
+            >
+              确认删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

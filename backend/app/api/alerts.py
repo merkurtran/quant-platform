@@ -15,6 +15,7 @@ from app.services.alert_service import (
     get_alert_rules,
     update_alert_rule,
     get_alert_logs,
+    delete_alert_rule,
     AlertRuleNotFoundError,
 )
 from shared.db.session import get_db
@@ -86,3 +87,16 @@ def list_alert_logs(
     except AlertRuleNotFoundError:
         raise BizException(BizErrorCode.NOT_FOUND, "Alert rule not found", status_code=404)
     return [AlertLogPublic.model_validate(log) for log in logs]
+
+
+@router.delete("/{rule_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_alert(
+    rule_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    try:
+        delete_alert_rule(db=db, rule_id=rule_id, user_id=current_user.id)
+    except AlertRuleNotFoundError:
+        raise BizException(BizErrorCode.NOT_FOUND, "Alert rule not found", status_code=404)
+    return None

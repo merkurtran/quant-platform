@@ -9,6 +9,9 @@ export const tradingService = {
   createAccount: (data: { broker_type?: string; account_alias: string }) =>
     api.post<BrokerAccount>("/broker_accounts", data).then((r) => r.data),
 
+  deleteAccount: (accountId: number) =>
+    api.delete(`/broker_accounts/${accountId}`),
+
   // 订单
   listOrders: (params?: {
     status?: string;

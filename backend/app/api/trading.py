@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, status
 
 from app.core.deps import get_current_user, get_async_db
 from app.core.exceptions import BizException, BizErrorCode
@@ -46,6 +46,29 @@ async def list_broker_accounts(
     stmt = select(BrokerAccount).where(BrokerAccount.user_id == user.id)
     result = await db.execute(stmt)
     return list(result.scalars().all())
+
+
+@router.delete("/broker_accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_broker_account(
+    account_id: int,
+    db=Depends(get_async_db),
+    user=Depends(get_current_user),
+):
+    from sqlalchemy import select
+    from app.models.trading import BrokerAccount
+
+    stmt = select(BrokerAccount).where(
+        BrokerAccount.id == account_id, BrokerAccount.user_id == user.id
+    )
+    result = await db.execute(stmt)
+    account = result.scalar_one_or_none()
+    if account is None:
+        raise BizException(
+            BizErrorCode.NOT_FOUND, "Broker account not found", status_code=404
+        )
+    await db.delete(account)
+    await db.commit()
+    return None
 
 
 @router.post("/orders", response_model=OrderOut)

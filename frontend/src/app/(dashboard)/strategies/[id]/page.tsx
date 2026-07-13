@@ -155,6 +155,8 @@ export default function StrategyDetailPage() {
   const pollRunIdRef = useRef<number | null>(null);
   const pollCountRef = useRef(0);
 
+  const isArchived = !isNew && strategy?.status === "archived";
+
   if (!isNew && isLoading) {
     return (
       <div className="flex h-64 items-center justify-center">
@@ -187,6 +189,11 @@ export default function StrategyDetailPage() {
         <TabsContent value="edit">
           <Card>
             <CardContent className="space-y-4 p-6">
+              {isArchived && (
+                <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+                  该策略已归档，不可编辑。如需修改请先重新激活策略。
+                </div>
+              )}
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label htmlFor="name">策略名称 *</Label>
@@ -195,6 +202,7 @@ export default function StrategyDetailPage() {
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     placeholder="如：双均线策略"
+                    disabled={isArchived}
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -204,6 +212,7 @@ export default function StrategyDetailPage() {
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="可选"
+                    disabled={isArchived}
                   />
                 </div>
               </div>
@@ -216,6 +225,7 @@ export default function StrategyDetailPage() {
                   onChange={(e) => setCode(e.target.value)}
                   className="min-h-[240px] font-mono text-xs"
                   placeholder="import backtrader as bt&#10;..."
+                  disabled={isArchived}
                 />
               </div>
 
@@ -226,13 +236,14 @@ export default function StrategyDetailPage() {
                   value={paramsJson}
                   onChange={(e) => setParamsJson(e.target.value)}
                   className="min-h-[80px] font-mono text-xs"
+                  disabled={isArchived}
                 />
               </div>
 
               <div className="flex justify-end">
                 <Button
                   onClick={() => saveMutation.mutate()}
-                  disabled={saveMutation.isPending || !name || !code}
+                  disabled={isArchived || saveMutation.isPending || !name || !code}
                 >
                   {saveMutation.isPending && (
                     <Loader2 className="h-4 w-4 animate-spin" />
