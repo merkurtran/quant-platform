@@ -194,6 +194,7 @@ GET /api/v1/market/klines?symbol=600519.SH&period=1d&limit=300
 以下接口返回全量列表（不分页）：
 
 - `GET /api/v1/market/watchlists`
+- `GET /api/v1/market/stocks/search`（limit 控制，默认 20，最大 100）
 - `GET /api/v1/alerts`
 - `GET /api/v1/strategies`
 - `GET /api/v1/trading/broker_accounts`
@@ -526,7 +527,10 @@ Mock 券商下同步立即成交（pending → filled）。
 |------|------|
 | `/login` | 登录 |
 | `/register` | 注册 |
-| `/market` | 行情 / 自选股 |
+| `/market` | 行情 / 自选股（右侧默认面板） |
+| `/market?panel=alerts` | 行情页 + 右侧告警面板（K 线保留左侧） |
+| `/market?panel=ai` | 行情页 + 右侧 AI 面板（K 线保留左侧） |
+| `/market?symbol=600519.SH` | 行情页 + 指定股票 K 线 |
 | `/market/[symbol]` | 个股详情 / K 线 |
 | `/strategies` | 策略列表 |
 | `/strategies/[id]` | 策略详情 / 编辑 |
@@ -534,9 +538,11 @@ Mock 券商下同步立即成交（pending → filled）。
 | `/trading/orders` | 订单 |
 | `/trading/positions` | 持仓 |
 | `/trading/accounts` | 券商账户 |
-| `/alerts` | 告警规则 |
+| `/alerts` | 告警规则（独立页面，仍可用） |
 | `/alerts/[id]/logs` | 告警日志 |
-| `/ai` | AI 助手 |
+| `/ai` | AI 助手（独立页面，仍可用） |
+
+> **面板切换**：告警和 AI 的主入口是 `/market?panel=alerts|ai`（在行情页右侧面板展示），独立页面 `/alerts` 和 `/ai` 仍保留可用。
 
 ---
 

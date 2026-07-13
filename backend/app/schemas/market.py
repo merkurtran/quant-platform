@@ -43,3 +43,12 @@ class AddWatchlistItemRequest(BaseModel):
 
 class CreateWatchlistRequest(BaseModel):
     name: str
+
+
+class StockSearchItem(BaseModel):
+    symbol: str
+    name: str
+
+
+class StockSearchResponse(BaseModel):
+    items: list[StockSearchItem]

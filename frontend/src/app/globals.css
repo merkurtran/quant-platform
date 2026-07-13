@@ -6,9 +6,11 @@
 :root {
   --radius: 0.5rem; /* 8px */
 
-  --background: #ffffff;
+  /* 主内容区：浅灰底 */
+  --background: #f5f6f8;
   --foreground: #111827;
 
+  /* 卡片/侧边栏：白底浮于灰底之上 */
   --card: #ffffff;
   --card-foreground: #111827;
 
@@ -18,13 +20,13 @@
   --primary: #2563eb;
   --primary-foreground: #ffffff;
 
-  --secondary: #f8f9fb;
+  --secondary: #eef0f4;
   --secondary-foreground: #111827;
 
-  --muted: #f8f9fb;
+  --muted: #eef0f4;
   --muted-foreground: #6b7280;
 
-  --accent: #f8f9fb;
+  --accent: #eef0f4;
   --accent-foreground: #111827;
 
   --destructive: #ef4444;
@@ -93,19 +95,19 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* 暗色模式 */
+  /* 暗色模式：主区深灰，侧边栏更深一档 */
   .dark {
     --background: #0a0a0a;
     --foreground: #e5e7eb;
     --card: #141414;
     --card-foreground: #e5e7eb;
-    --popover: #141414;
+    --popover: #1c1c1c;
     --popover-foreground: #e5e7eb;
     --secondary: #1c1c1c;
     --secondary-foreground: #e5e7eb;
     --muted: #1c1c1c;
     --muted-foreground: #9ca3af;
-    --accent: #1c1c1c;
+    --accent: #262626;
     --accent-foreground: #e5e7eb;
     --border: #2a2a2a;
     --input: #2a2a2a;

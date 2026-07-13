@@ -110,6 +110,28 @@
 
 **响应 data：** `{ "code": 0, "message": "deleted" }`（错误 `20001` 列表不存在 404）
 
+### GET /market/stocks/search
+
+按代码或名称模糊搜索 A 股股票。后端使用 AKShare `stock_zh_a_spot_em()` 获取全市场列表，带 60 秒内存缓存。
+
+| Query | 类型 | 必填 | 默认 | 说明 |
+|-------|------|------|------|------|
+| q | string | ✅ | — | 关键词（代码或名称），1~20 字符 |
+| limit | int | — | 20 | 返回条数，1~100 |
+
+**响应 data：**
+
+```json
+{
+  "items": [
+    { "symbol": "600519.SH", "name": "贵州茅台" },
+    { "symbol": "600519.SH", "name": "贵州茅台酒股份" }
+  ]
+}
+```
+
+> symbol 已带交易所后缀（`.SH` / `.SZ` / `.BJ`），前端可直接使用。
+
 ---
 
 ## Alerts 告警
@@ -183,6 +205,10 @@ condition 按 `rule_type` 区分（discriminated union）：
 ```json
 [{ "id": 1, "triggered_at": "...", "trigger_value": "1701.50", "message": "Alert triggered for 600519.SH at 1701.50 [first_trigger]" }]
 ```
+
+### DELETE /alerts/{rule_id}
+
+删除告警规则（级联删除关联日志）。**响应：** HTTP 204（错误 `20001` 不存在 404）
 
 ---
 

@@ -1,4 +1,5 @@
 import { Navbar } from "@/components/layout/navbar";
+import { RightNav } from "@/components/layout/right-nav";
 import { AuthGuard } from "@/components/layout/auth-guard";
 
 export default function DashboardLayout({
@@ -8,9 +9,12 @@ export default function DashboardLayout({
 }) {
   return (
     <AuthGuard>
-      <div className="flex min-h-screen flex-col">
+      <div className="flex h-screen flex-col bg-background">
         <Navbar />
-        <main className="flex-1">{children}</main>
+        <div className="flex flex-1 overflow-hidden">
+          <main className="flex-1 overflow-hidden">{children}</main>
+          <RightNav />
+        </div>
       </div>
     </AuthGuard>
   );

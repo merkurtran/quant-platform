@@ -53,6 +53,11 @@ export interface Watchlist {
   items: WatchlistItem[];
 }
 
+export interface StockSearchResult {
+  symbol: string;
+  name: string;
+}
+
 // ── Alerts ──
 
 export type AlertRuleType =

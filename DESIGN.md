@@ -34,17 +34,21 @@
 
 ### 2.1 基础色板
 
-| 语义 | 变量名 | 色值 | 用途 |
-|------|--------|------|------|
-| 背景 Background | `--background` | `#FFFFFF` | 页面主背景 |
-| 次背景 Secondary | `--secondary` | `#F8F9FB` | 卡片背景 / 表格条纹 / 侧边栏 |
-| 边框 Border | `--border` | `#E5E7EB` | 所有边框 / 分割线 |
-| 主色 Primary | `--primary` | `#2563EB` | 主按钮 / 链接 / 选中态 |
-| 危险 Danger | `--danger` | `#EF4444` | 删除 / 错误 / 跌 |
-| 成功 Success | `--success` | `#22C55E` | 成功提示 / 涨 |
-| 警告 Warning | `--warning` | `#F59E0B` | 警告 / 待处理 |
-| 主文字 Text | `--text` | `#111827` | 标题 / 正文 |
-| 次文字 Muted | `--muted` | `#6B7280` | 辅助说明 / 占位符 |
+> **软分隔原则**：页面不使用硬边框/分割线划分区域，而是用同色系不同明度的背景色块做层级递进。主内容区浅灰底、侧边栏/卡片白底、分区色块微灰底，靠深浅递进而非线条切割。
+
+| 语义 | 变量名 | 亮色值 | 暗色值 | 用途 |
+|------|--------|--------|--------|------|
+| 页面背景 Background | `--background` | `#F5F6F8` | `#0A0A0A` | 主内容区底色（最浅/最深） |
+| 卡片/侧边栏 Card | `--card` | `#FFFFFF` | `#141414` | 浮于背景之上的面板 |
+| 分区色块 Muted/Accent | `--muted` | `#EEF0F4` | `#1C1C1C` | Tab 栏 / 输入框底 / 行间隔 |
+| 次背景 Secondary | `--secondary` | `#EEF0F4` | `#1C1C1C` | 卡片背景 / 表格条纹 |
+| 边框 Border | `--border` | `#E5E7EB` | `#2A2A2A` | 仅表单输入框等必要场景 |
+| 主色 Primary | `--primary` | `#2563EB` | `#2563EB` | 主按钮 / 链接 / 选中态 |
+| 危险 Danger | `--danger` | `#EF4444` | `#EF4444` | 删除 / 错误 / 跌 |
+| 成功 Success | `--success` | `#22C55E` | `#22C55E` | 成功提示 / 涨 |
+| 警告 Warning | `--warning` | `#F59E0B` | `#F59E0B` | 警告 / 待处理 |
+| 主文字 Foreground | `--foreground` | `#111827` | `#E5E7EB` | 标题 / 正文 |
+| 次文字 Muted | `--muted-foreground` | `#6B7280` | `#9CA3AF` | 辅助说明 / 占位符 |
 
 ### 2.2 涨跌色（A 股惯例）
 
@@ -60,7 +64,22 @@
 
 ### 2.3 暗色模式
 
-当前版本仅做亮色模式。暗色模式预留 CSS 变量，后续迭代。
+已启用全局暗色模式，通过 `useThemeStore`（Zustand + persist）管理：
+
+- 主题状态持久化到 `localStorage`（key: `quant-theme`）
+- 通过 `document.documentElement.classList.toggle("dark")` 全局切换
+- 所有 CSS 变量在 `.dark` 选择器下重新定义（见 `globals.css`）
+- 主题切换按钮位于右侧导航栏底部（非页面局部）
+- hydration 安全：store 含 `_hasHydrated` 标志，hydration 完成后才渲染主题相关 UI
+
+| 变量 | 亮色 | 暗色 |
+|------|------|------|
+| `--background` | `#F5F6F8` | `#0A0A0A` |
+| `--card` | `#FFFFFF` | `#141414` |
+| `--popover` | `#FFFFFF` | `#1C1C1C` |
+| `--muted` / `--accent` | `#EEF0F4` | `#1C1C1C` / `#262626` |
+| `--border` | `#E5E7EB` | `#2A2A2A` |
+| `--foreground` | `#111827` | `#E5E7EB` |
 
 ---
 
@@ -179,12 +198,24 @@
 ## 10. 卡片 Card
 
 ```
-rounded-lg border border-border bg-background p-6
+rounded-lg bg-card p-6
 ```
 
+- **无硬边框**（不使用 `border border-border`），靠 `bg-card` 与 `bg-background` 的明度差浮起
 - 无重阴影
 - 内边距 `24px`（`p-6`）
 - 标题区与内容区间距 `16px`
+
+### 区域分隔规范
+
+| 层级 | 背景 | 用途 |
+|------|------|------|
+| L0 页面底 | `bg-background` | 主内容区（最浅灰） |
+| L1 面板 | `bg-card` | 侧边栏 / 信息栏 / K 线卡（白底浮起） |
+| L2 分区 | `bg-muted/30` | Tab 栏 / 输入框底 / 列表偶数行 |
+| L3 交互高亮 | `bg-accent` | hover / 选中态 |
+
+**禁止用 `border-b` / `border-t` / `border-l` 做区域分隔**。仅在表单输入框、表格边框等必要场景使用 `border`。
 
 ---
 
@@ -276,17 +307,55 @@ rounded-lg border border-border bg-background p-6
 
 ## 17. 导航布局
 
-- 左侧固定侧边栏（`width: 240px`），含 Logo + 主导航
-- 顶部栏（`height: 56px`），含页面标题 / 用户头像 / 通知
-- 内容区 `max-width: 1440px`，`padding: 24px`
+### 17.1 整体结构
 
-主导航分组：
+```
+┌──────────────────────────────────────────────────────────┐
+│  [Logo]  [股票搜索框]          [持仓N] [成本¥]  [头像]    │  顶部栏 h-12
+├────────────────────────────────────────────────┬─────────┤
+│                                                │  📊     │
+│           主内容区（浅灰底 bg-background）       │  🔔     │
+│                                                │  🤖     │  右侧导航 w-12
+│  ┌─────────────────────────────────────┐      │  📋     │
+│  │  右侧面板（白底 bg-card）            │      │  💹     │
+│  │  自选股 / 告警 / AI（可切换）         │      │         │
+│  └─────────────────────────────────────┘      │  ☀️/🌙  │  主题切换（底部）
+└────────────────────────────────────────────────┴─────────┘
+```
 
-1. 行情（自选股 / K 线）
+### 17.2 顶部栏（Navbar）
+
+- 高度 `48px`（`h-12`），`bg-background/80 backdrop-blur` 半透明
+- 左侧：Logo + 统一股票搜索框（`StockSearch` 组件）
+- 右侧：持仓数量 / 总成本 / 用户头像菜单
+- **无 `border-b`**，靠 `bg-background` 与下方 `bg-card` 的明度差分隔
+
+### 17.3 右侧导航栏（RightNav）
+
+- 宽度 `48px`（`w-12`），`bg-muted/30` 底色
+- 5 个导航图标（行情 / 告警 / AI / 策略 / 交易），垂直居中（`flex-1`）
+- 主题切换按钮（☀️/🌙）位于**底部**（`mt-auto`）
+- hover 时左侧弹出中文 tooltip（`opacity-0 → group-hover:opacity-100`）
+- 激活态：`bg-primary/15 text-primary`
+- **告警 / AI 图标**链接到 `/market?panel=alerts|ai`（不跳新页面，在行情页右侧切换面板）
+
+### 17.4 行情页面板切换
+
+行情页（`/market`）是平台 hub，左侧始终为 K 线图，右侧面板通过 URL `?panel=` 参数切换：
+
+| panel 参数 | 右侧面板 | 组件 |
+|------------|---------|------|
+| 无（默认） | 自选股列表 | 内联 Watchlist |
+| `alerts` | 告警规则列表 | `<AlertPanel />` |
+| `ai` | AI 对话 | `<AIPanel />` |
+
+策略 / 交易仍为独立页面（`/strategies` / `/trading/orders`）。
+
+### 17.5 主导航分组
+
+1. 行情（自选股 / K 线 / 告警面板 / AI 面板）
 2. 策略（策略列表 / 回测）
 3. 交易（订单 / 持仓 / 券商账户）
-4. 告警（规则 / 日志）
-5. AI 助手（对话）
 
 ---
 
@@ -301,3 +370,40 @@ rounded-lg border border-border bg-background p-6
 - ✅ 颜色 / 间距 / 字号必须使用本文件定义的值，不要自创
 - ✅ 所有数字（价格 / 金额 / 百分比 / 数量）使用 `tabular-nums`
 - ✅ 涨跌色遵循 A 股红涨绿跌
+
+---
+
+## 19. 股票搜索组件
+
+全站统一使用两个搜索组件：
+
+### 19.1 StockSearch（内联搜索框）
+
+- 用于顶部导航栏的搜索入口
+- 圆角输入框，`bg-muted/50` 底色，focus 时 `bg-muted`
+- 300ms 防抖，结果下拉为 `bg-popover shadow-lg`（无边框）
+- 键盘导航：↑↓ 选中、Enter 确认、Esc 关闭
+- 选中后清空输入（`clearOnSelect`）
+
+### 19.2 StockSearchDialog（弹窗搜索）
+
+- 用于「添加股票」「空状态选股」场景
+- TradingView 风格：居中弹出，600px 宽，`rounded-xl shadow-2xl`
+- 搜索框 + 筛选 Tab（全部 / 沪市 / 深市 / 北交所）
+- 结果列表：左侧 `text-primary` 代码 + 右侧 `text-foreground` 名称
+- 键盘导航同上
+
+**禁止在不同入口使用不同的搜索 UI**，统一走这两个组件。
+
+### 19.3 暗色模式图表适配
+
+K 线图（Lightweight Charts）需根据当前主题切换配色：
+
+| 元素 | 亮色 | 暗色 |
+|------|------|------|
+| 图表背景 | `#FFFFFF`（`--card`） | `#141414`（`--card`） |
+| 网格线 | `#EEF0F4`（`--muted`） | `#1C1C1C`（`--muted`） |
+| 文字 | `#111827`（`--foreground`） | `#E5E7EB`（`--foreground`） |
+| 十字线 | `#E5E7EB` 虚线 | `#2A2A2A` 虚线 |
+
+图表组件应从 `useThemeStore` 读取当前主题，主题切换时重新应用配色。

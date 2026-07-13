@@ -76,6 +76,38 @@ class AKShareProvider(MarketDataProvider):
         except Exception as e:
             raise SymbolNotFoundError(f"Failed to fetch symbol list: {e}") from e
         return df["代码"].tolist()
+
+    _spot_cache: dict = {"df": None, "ts": 0.0}
+
+    @classmethod
+    def _get_spot_df(cls):
+        """获取全市场行情 DataFrame，带 60 秒缓存避免频繁请求"""
+        import time
+        now = time.time()
+        if cls._spot_cache["df"] is not None and now - cls._spot_cache["ts"] < 60:
+            return cls._spot_cache["df"]
+        try:
+            df = ak.stock_zh_a_spot_em()
+        except Exception as e:
+            raise DataSourceConnectionError(f"Failed to fetch stock list: {e}") from e
+        cls._spot_cache["df"] = df
+        cls._spot_cache["ts"] = now
+        return df
+
+    def search_stocks(self, keyword: str, limit: int = 20) -> list[dict]:
+        """按代码或名称模糊搜索 A 股股票"""
+        from shared.market_data.utils import normalize_symbol
+        df = self._get_spot_df()
+        kw = keyword.strip().lower()
+        mask = (
+            df["代码"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["名称"].astype(str).str.lower().str.contains(kw, na=False)
+        )
+        matched = df[mask].head(limit)
+        return [
+            {"symbol": normalize_symbol(row["代码"]), "name": row["名称"]}
+            for _, row in matched.iterrows()
+        ]
     
 
     def get_corporate_actions(self, symbol: str, start_date=None) -> list[dict]:

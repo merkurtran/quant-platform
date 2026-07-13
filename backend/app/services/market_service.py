@@ -8,6 +8,13 @@ from app.models.market import Klines, Watchlists, WatchlistItems, CorporateActio
 from shared.market_data.adjustment import AdjustMethod, calculate_adjusted_prices
 
 
+def search_stocks(keyword: str, limit: int = 20) -> list[dict]:
+    """搜索股票，返回匹配的代码和名称列表"""
+    from shared.market_data.akshare_provider import AKShareProvider
+    provider = AKShareProvider()
+    return provider.search_stocks(keyword, limit=limit)
+
+
 class WatchlistNotFoundError(Exception):
     pass
 

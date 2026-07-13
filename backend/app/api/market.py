@@ -12,6 +12,8 @@ from app.schemas.market import (
     AddWatchlistItemRequest,
     WatchlistItemPublic,
     CreateWatchlistRequest,
+    StockSearchItem,
+    StockSearchResponse,
 )
 from app.services.market_service import (
     get_klines,
@@ -22,7 +24,8 @@ from app.services.market_service import (
     WatchlistItemAlreadyExistsError,
     WatchlistItemNotFoundError,
     create_watchlist,
-    get_klines_with_adjustment
+    get_klines_with_adjustment,
+    search_stocks as _search_stocks_service,
 )
 from shared.db.session import get_db
 from shared.market_data.adjustment import AdjustMethod
@@ -117,3 +120,14 @@ def create_watchlist_endpoint(
     except WatchlistItemAlreadyExistsError:
         raise BizException(BizErrorCode.ALREADY_EXISTS, "Watchlist with this name already exists", status_code=409)
     return WatchlistPublic.model_validate(watchlist)
+
+
+@router.get("/stocks/search", response_model=StockSearchResponse)
+def search_stocks(
+    q: str = Query(..., min_length=1, max_length=20),
+    limit: int = Query(20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+):
+    """按代码或名称搜索 A 股股票"""
+    items = _search_stocks_service(q, limit=limit)
+    return StockSearchResponse(items=[StockSearchItem(**item) for item in items])
