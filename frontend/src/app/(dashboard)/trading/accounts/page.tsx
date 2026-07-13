@@ -44,7 +44,7 @@ export default function AccountsPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">交易 · 券商账户</h1>
         <Button onClick={() => setOpen(true)}>

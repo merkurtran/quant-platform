@@ -87,6 +87,16 @@ export default function MarketPage() {
       (w: Watchlist) => w.id === (activeListId ?? watchlists?.[0]?.id)
     ) ?? null;
 
+  // 自动选中：有自选股但 URL 没指定 symbol 时，选第一只
+  useEffect(() => {
+    if (!symbol && watchlists?.length && watchlists[0].items.length) {
+      const firstSymbol = watchlists[0].items[0].symbol;
+      const params = new URLSearchParams(searchParams);
+      params.set("symbol", firstSymbol);
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [watchlists, symbol, searchParams, pathname, router]);
+
   // K 线
   const { data: klineData, isLoading: klineLoading } = useQuery({
     queryKey: ["klines", symbol, period, adjust],
@@ -193,7 +203,7 @@ export default function MarketPage() {
   };
 
   return (
-    <div className="-m-6 flex h-[calc(100vh-3.5rem)] overflow-hidden bg-background text-foreground">
+    <div className="flex h-[calc(100vh-3rem)] overflow-hidden bg-background text-foreground">
       {/* ── 主区（K线 + 周期） ── */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* 顶部信息栏 */}

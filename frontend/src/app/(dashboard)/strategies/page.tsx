@@ -52,7 +52,7 @@ export default function StrategiesPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">策略</h1>
         <Button onClick={() => router.push("/strategies/new")}>

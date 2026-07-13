@@ -164,7 +164,7 @@ export default function StrategyDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6">
       <div className="flex items-center gap-4">
         <Link href="/strategies">
           <ArrowLeft className="h-5 w-5 text-muted-foreground hover:text-foreground" />

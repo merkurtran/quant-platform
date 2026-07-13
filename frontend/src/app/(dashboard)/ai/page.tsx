@@ -89,7 +89,7 @@ export default function AIPage() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] gap-4">
+    <div className="flex h-[calc(100vh-3rem)] gap-4 p-4">
       {/* 对话列表 */}
       <div className="w-64 shrink-0 space-y-2 overflow-y-auto">
         <Button
