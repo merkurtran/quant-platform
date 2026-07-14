@@ -28,17 +28,20 @@ export function StrategyCopilot({
   });
 
   return (
-    <aside className="self-start border bg-card">
-      <div className="flex h-10 items-center gap-2 border-b px-3">
+    <section className="bg-muted/20 p-4">
+      <div className="flex items-center gap-2">
         <Sparkles className="h-4 w-4 text-primary" />
-        <h2 className="text-xs font-semibold">AI 策略生成</h2>
+        <div>
+          <h2 className="text-sm font-semibold">AI 策略生成</h2>
+          <p className="text-xs text-muted-foreground">描述交易逻辑，生成可编辑草稿</p>
+        </div>
       </div>
 
-      <div className="space-y-3 p-3">
+      <div className="mt-3 space-y-3">
         <Textarea
           value={prompt}
           onChange={(event) => setPrompt(event.target.value)}
-          className="min-h-28 resize-y text-xs leading-5"
+          className="min-h-32 resize-y bg-card text-xs leading-5"
           placeholder="描述交易逻辑、指标、周期与风控条件"
           disabled={disabled || mutation.isPending}
         />
@@ -65,7 +68,7 @@ export function StrategyCopilot({
         )}
 
         {draft && (
-          <div className="space-y-3 border-t pt-3">
+          <div className="space-y-3 rounded-lg bg-card p-3">
             <div>
               <p className="text-[10px] text-muted-foreground">预览</p>
               <p className="mt-1 text-xs font-medium">{draft.name}</p>
@@ -73,7 +76,7 @@ export function StrategyCopilot({
                 {draft.description}
               </p>
             </div>
-            <pre className="max-h-56 overflow-auto border bg-muted/30 p-2 text-[10px] leading-4">
+            <pre className="max-h-56 overflow-auto rounded-md bg-muted/30 p-2 text-[10px] leading-4">
               {draft.code}
             </pre>
             <Button
@@ -92,6 +95,6 @@ export function StrategyCopilot({
           </div>
         )}
       </div>
-    </aside>
+    </section>
   );
 }

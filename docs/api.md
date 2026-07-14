@@ -443,7 +443,7 @@ role 值：`user` / `assistant` / `tool`。content 结构因 role 不同（详�
 
 **响应 data：** `{ name, description, code, params }`
 
-> 上述三个接口沿用 `LLM__PROVIDER`、`LLM__MODEL` 和 `LLM__API_KEY`。Key 可留空以启动项目，但调用 AI 接口时会返回明确的配置错误。联网搜索当前要求 provider 为 `claude`。
+> 上述三个接口沿用 `LLM__PROVIDER`、`LLM__MODEL` 和 `LLM__API_KEY`。Key 可留空以启动项目，但调用 AI 接口时会返回明确的配置错误。联网搜索支持 `claude` 和 `deepseek`；DeepSeek 通过其官方 Anthropic 兼容端点调用 Web Search，建议模型配置为 `deepseek-v4-pro` 或 `deepseek-v4-flash`。
 
 ---
 

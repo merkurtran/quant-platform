@@ -1,16 +1,21 @@
 "use client";
 
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { Code2, Plus, Trash2, Pencil, Play } from "lucide-react";
+import { Code2, Plus, Search } from "lucide-react";
 import { strategyService } from "@/services/strategies";
+import { StrategyCard } from "@/components/strategy/strategy-card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/empty-state";
-import { TableSkeleton } from "@/components/layout/loading-skeleton";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,119 +26,128 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { STRATEGY_STATUS_LABELS } from "@/constants";
-import { formatDateTime } from "@/lib/format";
 import { toast } from "sonner";
 
-const STATUS_VARIANT: Record<string, "default" | "secondary" | "success" | "warning"> = {
-  draft: "secondary",
-  backtested: "default",
-  paper_running: "success",
-  archived: "warning",
-};
+type SortMode = "newest" | "oldest" | "name";
 
 export default function StrategiesPage() {
-  const router = useRouter();
   const queryClient = useQueryClient();
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [sortMode, setSortMode] = useState<SortMode>("newest");
 
   const { data: strategies, isLoading } = useQuery({
     queryKey: ["strategies"],
     queryFn: strategyService.list,
   });
 
+  const visibleStrategies = useMemo(() => {
+    const keyword = query.trim().toLowerCase();
+    const filtered = (strategies ?? []).filter((strategy) =>
+      `${strategy.name} ${strategy.description ?? ""}`.toLowerCase().includes(keyword)
+    );
+    return filtered.sort((a, b) => {
+      if (sortMode === "name") return a.name.localeCompare(b.name, "zh-CN");
+      const difference = Date.parse(a.updated_at) - Date.parse(b.updated_at);
+      return sortMode === "oldest" ? difference : -difference;
+    });
+  }, [query, sortMode, strategies]);
+
   const deleteMutation = useMutation({
-    mutationFn: (id: number) => strategyService.delete(id),
+    mutationFn: strategyService.delete,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["strategies"] });
       setDeleteId(null);
-      toast.success("已删除");
+      toast.success("策略已删除");
     },
   });
 
   return (
-    <div className="space-y-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">策略</h1>
-        <Button onClick={() => router.push("/strategies/new")}>
-          <Plus className="h-4 w-4" />
-          新建策略
+    <div className="h-full overflow-y-auto">
+      <header className="flex items-center justify-between bg-card px-6 py-5">
+        <div>
+          <h1 className="text-2xl font-bold">我的策略</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            编写、管理并回测你的量化交易逻辑
+          </p>
+        </div>
+        <Button asChild>
+          <Link href="/strategies/new">
+            <Plus className="h-4 w-4" />
+            新建策略
+          </Link>
         </Button>
+      </header>
+
+      <div className="flex items-center gap-3 bg-muted/30 px-6 py-4">
+        <div className="relative w-full max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="pl-9"
+            placeholder="搜索策略名称或描述"
+          />
+        </div>
+        <Select value={sortMode} onValueChange={(value: SortMode) => setSortMode(value)}>
+          <SelectTrigger className="w-32 bg-card">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">最近更新</SelectItem>
+            <SelectItem value="oldest">最早更新</SelectItem>
+            <SelectItem value="name">按名称</SelectItem>
+          </SelectContent>
+        </Select>
+        <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+          {visibleStrategies.length} 个策略
+        </span>
       </div>
 
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <TableSkeleton key={i} rows={2} cols={2} />
-          ))}
-        </div>
-      ) : !strategies || strategies.length === 0 ? (
-        <EmptyState
-          icon={Code2}
-          title="还没有策略"
-          description="创建你的第一个量化策略，编写 backtrader 代码并回测"
-          action={
-            <Button onClick={() => router.push("/strategies/new")}>
-              <Plus className="h-4 w-4" />
-              新建策略
+      <main className="p-6">
+        {isLoading ? (
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="h-52 animate-pulse rounded-lg bg-card" />
+            ))}
+          </div>
+        ) : !strategies?.length ? (
+          <EmptyState
+            icon={Code2}
+            title="还没有策略"
+            description="创建第一个量化策略，编写 backtrader 代码并开始回测"
+            action={
+              <Button asChild>
+                <Link href="/strategies/new">
+                  <Plus className="h-4 w-4" />
+                  新建策略
+                </Link>
+              </Button>
+            }
+          />
+        ) : visibleStrategies.length === 0 ? (
+          <div className="flex h-64 flex-col items-center justify-center gap-3 text-center">
+            <Search className="h-10 w-10 text-muted-foreground" />
+            <p className="font-semibold">没有匹配的策略</p>
+            <Button variant="outline" size="sm" onClick={() => setQuery("")}>
+              清除搜索
             </Button>
-          }
-        />
-      ) : (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {strategies.map((s) => (
-            <Card key={s.id} className="hover:shadow-sm transition-shadow">
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <Link href={`/strategies/${s.id}`} className="flex-1">
-                    <h3 className="font-semibold text-foreground hover:text-primary">
-                      {s.name}
-                    </h3>
-                    <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">
-                      {s.description ?? "无描述"}
-                    </p>
-                  </Link>
-                  <Badge variant={STATUS_VARIANT[s.status] ?? "secondary"} className="ml-2 shrink-0">
-                    {STRATEGY_STATUS_LABELS[s.status] ?? s.status}
-                  </Badge>
-                </div>
-
-                <div className="mt-4 flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {formatDateTime(s.updated_at)}
-                  </span>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" asChild>
-                      <Link href={`/market?panel=backtest&strategyId=${s.id}`} title="回测">
-                        <Play className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button variant="ghost" size="icon" asChild>
-                      <Link href={`/strategies/${s.id}`} title="编辑">
-                        <Pencil className="h-4 w-4" />
-                      </Link>
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => setDeleteId(s.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-danger" />
-                    </Button>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+          </div>
+        ) : (
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+            {visibleStrategies.map((strategy) => (
+              <StrategyCard key={strategy.id} strategy={strategy} onDelete={setDeleteId} />
+            ))}
+          </div>
+        )}
+      </main>
 
       <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除？</AlertDialogTitle>
+            <AlertDialogTitle>确认删除策略？</AlertDialogTitle>
             <AlertDialogDescription>
-              删除策略将同时删除其所有回测记录，此操作不可撤销。
+              删除后相关回测记录也会一并移除，此操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

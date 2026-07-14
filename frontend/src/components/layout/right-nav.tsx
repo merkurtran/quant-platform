@@ -29,7 +29,7 @@ export function RightNav() {
   const { theme, toggleTheme, _hasHydrated } = useThemeStore();
 
   return (
-    <nav className="flex w-12 shrink-0 flex-col items-center bg-card py-3">
+    <nav className="relative z-40 flex w-12 shrink-0 flex-col items-center bg-card py-3">
       {/* 居中的导航图标 */}
       <div className="flex flex-1 flex-col items-center gap-1">
         {NAV_ITEMS.map((item) => {
@@ -65,7 +65,7 @@ export function RightNav() {
               )}
             >
               <Icon className="h-5 w-5" strokeWidth={1.5} />
-              <span className="pointer-events-none absolute right-full mr-2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+              <span className="pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
                 {item.label}
               </span>
             </Link>
@@ -85,7 +85,7 @@ export function RightNav() {
           ) : (
             <Sun className="h-5 w-5" strokeWidth={1.5} />
           )}
-          <span className="pointer-events-none absolute right-full mr-2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+          <span className="pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
             {theme === "light" ? "暗色模式" : "亮色模式"}
           </span>
         </button>

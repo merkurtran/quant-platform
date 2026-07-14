@@ -18,7 +18,8 @@ PROVIDER_CONFIG = {
         "default_model": "claude-sonnet-4-20250514",
     },
     "deepseek": {
-        "base_url": "https://api.deepseek.com/v1",
+        "base_url": "https://api.deepseek.com",
+        "anthropic_base_url": "https://api.deepseek.com/anthropic",
         "default_model": "deepseek-chat",
     },
     "custom": {
@@ -174,15 +175,15 @@ class LLMClient:
     async def web_search(self, system: str, prompt: str, max_uses: int = 5) -> str:
         """Run Claude server-side web search and return the final text response."""
         self._require_api_key()
-        if self._provider != "claude":
+        if self._provider not in {"claude", "deepseek"}:
             raise LLMConfigurationError(
-                "当前 LLM provider 不支持项目内置联网搜索，请将 LLM__PROVIDER 设为 claude"
+                "当前 LLM provider 不支持项目内置联网搜索，请使用 claude 或 deepseek"
             )
 
         messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
         response = None
         for _ in range(3):
-            response = await self._anthropic_client().messages.create(
+            response = await self._web_search_client().messages.create(
                 model=self._model,
                 system=system,
                 messages=messages,
@@ -253,6 +254,17 @@ class LLMClient:
         return AsyncAnthropic(
             api_key=self._api_key,
             base_url=self._base_url,
+            timeout=self._timeout,
+        )
+
+    def _web_search_client(self) -> AsyncAnthropic:
+        if self._provider == "deepseek":
+            base_url = PROVIDER_CONFIG["deepseek"]["anthropic_base_url"]
+        else:
+            base_url = self._base_url
+        return AsyncAnthropic(
+            api_key=self._api_key,
+            base_url=base_url,
             timeout=self._timeout,
         )
 

@@ -4,7 +4,7 @@ import pytest
 from pydantic import SecretStr
 
 from app.ai.analysis_service import AIAnalysisService
-from app.ai.llm_client import LLMClient
+from app.ai.llm_client import LLMClient, PROVIDER_CONFIG
 from app.core.config import LLMSettings
 from app.schemas.ai import StockEventsRequest
 
@@ -151,3 +151,10 @@ def test_claude_message_conversion_preserves_tool_result():
     assert system == "system"
     assert messages[1]["content"][0]["type"] == "tool_use"
     assert messages[2]["content"][0]["type"] == "tool_result"
+
+
+def test_deepseek_has_official_anthropic_web_search_endpoint():
+    assert (
+        PROVIDER_CONFIG["deepseek"]["anthropic_base_url"]
+        == "https://api.deepseek.com/anthropic"
+    )
