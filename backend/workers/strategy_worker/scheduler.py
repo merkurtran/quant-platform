@@ -79,6 +79,7 @@ def process_one_backtest(run_id: int) -> None:
 
         if result.success:
             run.status = "success"
+            strategy.status = "backtested"
             result_dict = _build_result_dict(result)
             db.add(BacktestResults(run_id=run.id, **result_dict))
         else:

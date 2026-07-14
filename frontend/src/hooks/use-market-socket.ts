@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { WS_BASE_URL } from "@/constants";
 import { useAuthStore } from "@/stores/auth";
 import type { QuoteMessage, AlertPushMessage } from "@/types";
@@ -93,7 +93,7 @@ export function useMarketSocket(options: UseMarketSocketOptions = {}) {
     };
   }, [token]);
 
-  const subscribe = (symbols: string[]) => {
+  const subscribe = useCallback((symbols: string[]) => {
     const newSymbols = symbols.filter((s) => !subscribedRef.current.has(s));
     if (newSymbols.length === 0) return;
     newSymbols.forEach((s) => subscribedRef.current.add(s));
@@ -102,7 +102,7 @@ export function useMarketSocket(options: UseMarketSocketOptions = {}) {
         JSON.stringify({ action: "subscribe", symbols: newSymbols })
       );
     }
-  };
+  }, []);
 
   return { isConnected, subscribe };
 }

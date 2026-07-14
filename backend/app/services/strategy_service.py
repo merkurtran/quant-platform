@@ -75,6 +75,8 @@ def update_strategy(
         strategy.code = code
     if params is not None:
         strategy.params = params
+    if (code is not None or params is not None) and strategy.status == "backtested":
+        strategy.status = "draft"
     db.commit()
     db.refresh(strategy)
     return strategy

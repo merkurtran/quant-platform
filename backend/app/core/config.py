@@ -62,18 +62,11 @@ class EncryptSettings(BaseModel):
 
 class LLMSettings(BaseModel):
     provider: str = "openai"
-    api_key: SecretStr
+    api_key: SecretStr = SecretStr("")
     model: str = "gpt-3.5-turbo"
     rate_limit_per_minute: int = 10
     max_agent_rounds: int = 5
     message_max_length: int = 4096
-
-    @field_validator("api_key")
-    @classmethod
-    def api_key_must_not_be_empty(cls, v: SecretStr) -> SecretStr:
-        if not v.get_secret_value().strip():
-            raise ValueError("LLM api_key is required and must not be empty")
-        return v
 
 
 class TradingSettings(BaseModel):
@@ -121,5 +114,3 @@ class Settings(BaseSettings):
 @lru_cache
 def get_settings() -> Settings:
     return Settings()
-
-    

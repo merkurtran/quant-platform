@@ -86,6 +86,29 @@
 }
 ```
 
+### GET /market/quotes
+
+批量获取行情快照，`symbols` 使用逗号分隔，最多 100 个代码。
+
+```
+GET /market/quotes?symbols=600519.SH,000001.SZ
+```
+
+**响应 data：**
+
+```json
+[
+  {
+    "symbol": "600519.SH",
+    "price": 1530.0,
+    "previous_close": 1500.0,
+    "change": 30.0,
+    "change_pct": 2.0,
+    "ts": "2026-07-14T15:00:00+08:00"
+  }
+]
+```
+
 ### GET /market/watchlists
 
 **响应 data：** `WatchlistPublic[]`（含 items）
@@ -384,6 +407,43 @@ role 值：`user` / `assistant` / `tool`。content 结构因 role 不同（详�
 
 > `message_id` 固定为 0（占位），实际消息从列表接口获取。  
 > 后端在响应前完成 LLM + Tool Use 循环（最多 5 轮），前端需展示等待动画。
+
+### POST /ai/stock-events
+
+使用当前 `.env` 中配置的 Claude 模型联网搜索最近 7 日公开信息。结果按模型、股票和提示词版本缓存 15 分钟；缓存只存 Redis，不写入业务数据库。
+
+**请求体：**
+
+```json
+{ "symbol": "600519.SH", "stock_name": "贵州茅台" }
+```
+
+**响应 data：** `{ symbol, stock_name, events, auto_analysis, generated_at, cached }`
+
+`events` 最多 5 条。没有可核验事件时，`events` 为空并在 `auto_analysis` 返回基于公开网络信息的综合分析。
+
+### POST /ai/stock-analysis
+
+针对用户从 `stock-events` 选中的事件联网核验并生成结构化事件分析。同一股票和事件缓存 15 分钟。
+
+**请求体：** `{ symbol, stock_name?, event }`
+**响应 data：** `{ meta, sections, disclaimer, sources, cached }`
+
+`sections` 固定顺序为事件核心、主题映射、候选标的和风险清单；事实性结论应在 `sources` 中提供公开来源。
+
+### POST /ai/strategy-drafts
+
+根据自然语言描述生成 backtrader 策略草稿，不自动保存或启用。
+
+**请求体：**
+
+```json
+{ "name": "双均线策略", "description": "5 日线上穿 20 日线买入，反向卖出" }
+```
+
+**响应 data：** `{ name, description, code, params }`
+
+> 上述三个接口沿用 `LLM__PROVIDER`、`LLM__MODEL` 和 `LLM__API_KEY`。Key 可留空以启动项目，但调用 AI 接口时会返回明确的配置错误。联网搜索当前要求 provider 为 `claude`。
 
 ---
 

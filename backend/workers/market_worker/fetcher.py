@@ -73,10 +73,44 @@ def _save_klines(rows: list[dict]) -> None:
 def _publish_quote(symbol: str, latest: dict) -> None:
     """发布最新行情到 redis, 供 websocket 订阅"""
     try:
+        latest_ts = latest["ts"]
+        latest_date = latest_ts.date() if hasattr(latest_ts, "date") else None
+        previous_close = None
+        if latest_date is not None:
+            db = SessionLocal()
+            try:
+                daily_rows = (
+                    db.query(Klines.ts, Klines.close)
+                    .filter(Klines.symbol == symbol, Klines.period == "1d")
+                    .order_by(Klines.ts.desc())
+                    .limit(2)
+                    .all()
+                )
+                previous_close = next(
+                    (
+                        Decimal(str(close))
+                        for ts, close in daily_rows
+                        if ts.date() < latest_date
+                    ),
+                    None,
+                )
+            finally:
+                db.close()
+
+        price = Decimal(str(latest["close"]))
+        change = price - previous_close if previous_close is not None else None
+        change_pct = (
+            change / previous_close * Decimal("100")
+            if change is not None and previous_close != 0
+            else None
+        )
         message = json.dumps({
             "symbol": symbol,
-            "price": float(latest["close"]),
-            "ts": latest["ts"].isoformat() if hasattr(latest["ts"], "isoformat") else str(latest["ts"]),
+            "price": float(price),
+            "previous_close": float(previous_close) if previous_close is not None else None,
+            "change": float(change) if change is not None else None,
+            "change_pct": float(change_pct) if change_pct is not None else None,
+            "ts": latest_ts.isoformat() if hasattr(latest_ts, "isoformat") else str(latest_ts),
         })
         _rc = get_redis_client()
         _rc.publish(f"quotes:{symbol}", message)

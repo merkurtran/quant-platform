@@ -7,25 +7,25 @@ import {
   Code2,
   ArrowLeftRight,
   Bell,
-  Bot,
   Sun,
   Moon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useThemeStore } from "@/stores/theme";
+import { useMarketStore } from "@/stores/market";
 
 const NAV_ITEMS = [
   { label: "行情", icon: CandlestickChart, href: "/market", panel: undefined },
   { label: "告警", icon: Bell, href: "/market", panel: "alerts" },
-  { label: "AI", icon: Bot, href: "/market", panel: "ai" },
-  { label: "策略", icon: Code2, href: "/strategies", panel: undefined },
-  { label: "交易", icon: ArrowLeftRight, href: "/trading/orders", panel: undefined },
+  { label: "策略", icon: Code2, href: "/market", panel: "backtest" },
+  { label: "交易", icon: ArrowLeftRight, href: "/market", panel: "trading" },
 ];
 
 export function RightNav() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const currentPanel = searchParams.get("panel");
+  const selectedSymbol = useMarketStore((state) => state.selectedSymbol);
   const { theme, toggleTheme, _hasHydrated } = useThemeStore();
 
   return (
@@ -33,9 +33,14 @@ export function RightNav() {
       {/* 居中的导航图标 */}
       <div className="flex flex-1 flex-col items-center gap-1">
         {NAV_ITEMS.map((item) => {
-          const href = item.panel
-            ? `${item.href}?panel=${item.panel}`
-            : item.href;
+          const marketSymbol = searchParams.get("symbol") ?? selectedSymbol;
+          const marketParams = new URLSearchParams();
+          if (marketSymbol) marketParams.set("symbol", marketSymbol);
+          if (item.panel) marketParams.set("panel", item.panel);
+          const href =
+            item.href === "/market" && marketParams.size > 0
+              ? `${item.href}?${marketParams.toString()}`
+              : item.href;
 
           let isActive: boolean;
           if (item.panel) {

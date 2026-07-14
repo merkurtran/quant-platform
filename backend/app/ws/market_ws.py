@@ -46,7 +46,7 @@ async def market_ws(
 
     await websocket.accept()
     logger.info(f"WebSocket market connection established for user {user_id}")
-    redis = await get_async_redis_client()
+    redis = get_async_redis_client()
     pubsub = redis.pubsub()
     subscribed_quotes = set()
 
@@ -70,6 +70,9 @@ async def market_ws(
                     if symbol not in subscribed_quotes:
                         await pubsub.subscribe(f"quotes:{symbol}")
                         subscribed_quotes.add(symbol)
+                        cached = await redis.get(f"latest_price:{symbol}")
+                        if cached and websocket.client_state == WebSocketState.CONNECTED:
+                            await websocket.send_text(cached)
 
     async def forward_messages():
         async for message in pubsub.listen():
@@ -82,4 +85,4 @@ async def market_ws(
     except WebSocketDisconnect:
         logger.info(f"WebSocket market disconnected for user {user_id}")
     finally:
-        await pubsub.close()
+        await pubsub.aclose()

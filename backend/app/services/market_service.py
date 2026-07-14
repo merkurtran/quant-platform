@@ -1,5 +1,4 @@
-from datetime import datetime
-
+from sqlalchemy import func, tuple_
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
@@ -72,6 +71,124 @@ def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int
     
     actions = get_corporate_actions_from(db, symbol)
     return calculate_adjusted_prices(raw_dicts, actions, adjust)
+
+
+def get_quote_snapshots(db: Session, symbols: list[str]) -> list[dict]:
+    daily_ranked = (
+        db.query(
+            Klines.symbol.label("symbol"),
+            Klines.ts.label("ts"),
+            Klines.close.label("close"),
+            func.row_number()
+            .over(partition_by=Klines.symbol, order_by=Klines.ts.desc())
+            .label("row_number"),
+        )
+        .filter(Klines.period == "1d", Klines.symbol.in_(symbols))
+        .subquery()
+    )
+    daily_rows = (
+        db.query(daily_ranked.c.symbol, daily_ranked.c.ts, daily_ranked.c.close)
+        .filter(daily_ranked.c.row_number <= 2)
+        .order_by(daily_ranked.c.symbol, daily_ranked.c.ts.desc())
+        .all()
+    )
+
+    daily_by_symbol: dict[str, list] = {}
+    for row in daily_rows:
+        daily_by_symbol.setdefault(row.symbol, []).append(row)
+
+    intraday_periods = ("1m", "5m", "15m", "30m", "60m")
+    period_rows = (
+        db.query(Klines.symbol, Klines.period)
+        .filter(
+            Klines.symbol.in_(symbols),
+            Klines.period.in_(intraday_periods),
+        )
+        .distinct()
+        .all()
+    )
+    available_periods: dict[str, set[str]] = {}
+    for row in period_rows:
+        available_periods.setdefault(row.symbol, set()).add(row.period)
+    preferred_pairs = [
+        (symbol, next(period for period in intraday_periods if period in periods))
+        for symbol, periods in available_periods.items()
+    ]
+
+    intraday_by_symbol: dict[str, list] = {}
+    if preferred_pairs:
+        intraday_ranked = (
+            db.query(
+                Klines.symbol.label("symbol"),
+                Klines.ts.label("ts"),
+                Klines.close.label("close"),
+                func.row_number()
+                .over(partition_by=Klines.symbol, order_by=Klines.ts.desc())
+                .label("row_number"),
+            )
+            .filter(tuple_(Klines.symbol, Klines.period).in_(preferred_pairs))
+            .subquery()
+        )
+        intraday_rows = (
+            db.query(
+                intraday_ranked.c.symbol,
+                intraday_ranked.c.ts,
+                intraday_ranked.c.close,
+            )
+            .filter(intraday_ranked.c.row_number <= 2000)
+            .order_by(intraday_ranked.c.symbol, intraday_ranked.c.ts.desc())
+            .all()
+        )
+        for row in intraday_rows:
+            intraday_by_symbol.setdefault(row.symbol, []).append(row)
+
+    snapshots = []
+    for symbol in symbols:
+        recent = intraday_by_symbol.get(symbol, [])
+        daily = daily_by_symbol.get(symbol, [])
+        if recent:
+            latest = recent[0]
+            previous_close = next(
+                (
+                    row.close
+                    for row in recent[1:]
+                    if row.ts.date() < latest.ts.date()
+                ),
+                None,
+            )
+            if previous_close is None:
+                previous_close = next(
+                    (
+                        row.close
+                        for row in daily
+                        if row.ts.date() < latest.ts.date()
+                    ),
+                    None,
+                )
+        else:
+            recent = daily
+            if not recent:
+                continue
+            latest = recent[0]
+            previous_close = recent[1].close if len(recent) > 1 else None
+
+        change = latest.close - previous_close if previous_close is not None else None
+        change_pct = (
+            change / previous_close * 100
+            if change is not None and previous_close != 0
+            else None
+        )
+        snapshots.append(
+            {
+                "symbol": symbol,
+                "price": latest.close,
+                "previous_close": previous_close,
+                "change": change,
+                "change_pct": change_pct,
+                "ts": latest.ts,
+            }
+        )
+    return snapshots
 
 
 def get_watchlists(db: Session, user_id: int) -> list[Watchlists]:

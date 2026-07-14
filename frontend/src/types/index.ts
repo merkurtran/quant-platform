@@ -203,11 +203,66 @@ export interface SendMessageResponse {
   tool_calls: Array<unknown> | null;
 }
 
+export interface EvidenceSource {
+  title: string;
+  url: string;
+  source_name: string;
+  published_at: string | null;
+}
+
+export interface StockNewsEvent {
+  event_id: string;
+  title: string;
+  summary: string;
+  source_name: string;
+  source_url: string;
+  published_at: string | null;
+}
+
+export interface AnalysisSection {
+  id: "event_core" | "topic_mapping" | "candidate_stocks" | "risk_checklist";
+  title: string;
+  type: "card" | "table" | "list";
+  content: Record<string, unknown> | Array<Record<string, unknown>>;
+}
+
+export interface StockAnalysis {
+  meta: {
+    symbol: string;
+    stock_name: string | null;
+    generated_at: string;
+    trigger: string;
+  };
+  sections: AnalysisSection[];
+  disclaimer: string;
+  sources: EvidenceSource[];
+  cached: boolean;
+}
+
+export interface StockEventsResponse {
+  symbol: string;
+  stock_name: string | null;
+  events: StockNewsEvent[];
+  auto_analysis: StockAnalysis | null;
+  generated_at: string;
+  cached: boolean;
+}
+
+export interface StrategyDraft {
+  name: string;
+  description: string;
+  code: string;
+  params: Record<string, unknown>;
+}
+
 // ── WebSocket ──
 
 export interface QuoteMessage {
   symbol: string;
   price: number;
+  previous_close?: number | null;
+  change?: number | null;
+  change_pct?: number | null;
   ts: string;
 }
 

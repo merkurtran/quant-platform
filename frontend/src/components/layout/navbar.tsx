@@ -13,6 +13,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/stores/auth";
+import { useMarketStore } from "@/stores/market";
 import { tradingService } from "@/services/trading";
 import { StockSearch } from "@/components/stock-search";
 import { toast } from "sonner";
@@ -32,6 +33,8 @@ import type { StockSearchResult } from "@/types";
 export function Navbar() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const selectedSymbol = useMarketStore((state) => state.selectedSymbol);
+  const setSelectedSymbol = useMarketStore((state) => state.setSelectedSymbol);
   const [userOpen, setUserOpen] = useState(false);
   const [logoutOpen, setLogoutOpen] = useState(false);
   const userRef = useRef<HTMLDivElement>(null);
@@ -60,6 +63,7 @@ export function Navbar() {
   }, []);
 
   const handleSearchSelect = (stock: StockSearchResult) => {
+    setSelectedSymbol(stock.symbol);
     router.push(`/market?symbol=${stock.symbol}`);
   };
 
@@ -73,7 +77,10 @@ export function Navbar() {
   return (
     <header className="sticky top-0 z-30 flex h-12 items-center gap-4 bg-card px-4">
       {/* Logo */}
-      <Link href="/market" className="flex shrink-0 items-center gap-2">
+      <Link
+        href={selectedSymbol ? `/market?symbol=${selectedSymbol}` : "/market"}
+        className="flex shrink-0 items-center gap-2"
+      >
         <TrendingUp className="h-5 w-5 text-primary" />
         <span className="text-base font-bold">Quant</span>
       </Link>
@@ -88,7 +95,11 @@ export function Navbar() {
 
       {/* 持仓数据 */}
       <Link
-        href="/trading/positions"
+        href={
+          selectedSymbol
+            ? `/market?symbol=${selectedSymbol}&panel=trading`
+            : "/market?panel=trading"
+        }
         className="flex items-center gap-1.5 rounded-lg px-2 py-1 text-sm transition-colors hover:bg-accent"
       >
         <Wallet className="h-4 w-4 text-muted-foreground" />

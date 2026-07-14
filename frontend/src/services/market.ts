@@ -1,5 +1,11 @@
 import api from "@/lib/api";
-import type { KlineListResponse, Watchlist, WatchlistItem, StockSearchResult } from "@/types";
+import type {
+  KlineListResponse,
+  QuoteMessage,
+  Watchlist,
+  WatchlistItem,
+  StockSearchResult,
+} from "@/types";
 
 export const marketService = {
   getKlines: (params: {
@@ -20,6 +26,13 @@ export const marketService = {
 
   getWatchlists: () =>
     api.get<Watchlist[]>("/market/watchlists").then((r) => r.data),
+
+  getQuotes: (symbols: string[]) =>
+    api
+      .get<QuoteMessage[]>("/market/quotes", {
+        params: { symbols: symbols.join(",") },
+      })
+      .then((r) => r.data),
 
   createWatchlist: (name: string) =>
     api.post<Watchlist>("/market/watchlists", { name }).then((r) => r.data),

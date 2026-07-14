@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Code2, Plus, Trash2, Pencil } from "lucide-react";
+import { Code2, Plus, Trash2, Pencil, Play } from "lucide-react";
 import { strategyService } from "@/services/strategies";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -104,7 +104,12 @@ export default function StrategiesPage() {
                   </span>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" asChild>
-                      <Link href={`/strategies/${s.id}`}>
+                      <Link href={`/market?panel=backtest&strategyId=${s.id}`} title="回测">
+                        <Play className="h-4 w-4" />
+                      </Link>
+                    </Button>
+                    <Button variant="ghost" size="icon" asChild>
+                      <Link href={`/strategies/${s.id}`} title="编辑">
                         <Pencil className="h-4 w-4" />
                       </Link>
                     </Button>

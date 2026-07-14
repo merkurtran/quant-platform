@@ -7,6 +7,9 @@
   - get_watchlist_symbols: 自选股查询
   - _check_alerts 分钟线集成
 """
+import json
+from datetime import datetime
+from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -17,6 +20,7 @@ from workers.market_worker.fetcher import (
     get_minute_kline_symbols,
     get_watchlist_symbols,
     _check_alerts,
+    _publish_quote,
 )
 
 
@@ -186,7 +190,6 @@ class TestCheckAlertsIntegration:
         rows = [{"close": "1850.00", "ts": "2026-07-10 14:30:00+00:00"}]
 
         _check_alerts("600519.SH", rows)
-
         mock_evaluate.assert_called_once()
 
     @patch("workers.market_worker.fetcher.evaluate_and_notify")
@@ -208,3 +211,29 @@ class TestCheckAlertsIntegration:
 
         # 应该不抛异常
         _check_alerts("600519.SH", rows)
+
+
+class TestPublishQuote:
+
+    @patch("workers.market_worker.fetcher.get_redis_client")
+    @patch("workers.market_worker.fetcher.SessionLocal")
+    def test_publishes_change_for_watchlist_rows(
+        self, mock_session_factory, mock_get_redis
+    ):
+        mock_db = MagicMock()
+        mock_session_factory.return_value = mock_db
+        mock_db.query.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = [
+            (datetime(2026, 7, 14), Decimal("1219.50")),
+            (datetime(2026, 7, 13), Decimal("1200.00")),
+        ]
+        mock_redis = mock_get_redis.return_value
+
+        _publish_quote(
+            "600519.SH",
+            {"close": Decimal("1218.00"), "ts": datetime(2026, 7, 14, 10, 30)},
+        )
+
+        message = json.loads(mock_redis.publish.call_args.args[1])
+        assert message["previous_close"] == 1200.0
+        assert message["change"] == 18.0
+        assert message["change_pct"] == 1.5

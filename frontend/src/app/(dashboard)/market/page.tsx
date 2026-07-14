@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useState, useEffect, useMemo } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, Plus, Maximize2, Minimize2, Search } from "lucide-react";
 import { marketService } from "@/services/market";
@@ -25,9 +25,11 @@ import {
 import { KlineChart } from "@/components/chart/kline-chart";
 import { StockSearchDialog } from "@/components/stock-search-dialog";
 import { AlertPanel } from "@/components/panels/alert-panel";
-import { AIPanel } from "@/components/panels/ai-panel";
+import { StockAnalysisPanel } from "@/components/panels/stock-analysis-panel";
+import { StrategyBacktestPanel } from "@/components/panels/strategy-backtest-panel";
+import { TradingPanel } from "@/components/panels/trading-panel";
 import { ADJUST_OPTIONS } from "@/constants";
-import { useMarketSocket } from "@/hooks/use-market-socket";
+import { useMarketStore } from "@/stores/market";
 import { formatPrice, priceColor, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -46,16 +48,19 @@ const QUICK_PERIODS = [
 
 export default function MarketPage() {
   const router = useRouter();
-  const pathname = usePathname();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
 
-  const symbol = searchParams.get("symbol");
+  const routeSymbol = searchParams.get("symbol");
   const panel = searchParams.get("panel");
+  const selectedSymbol = useMarketStore((state) => state.selectedSymbol);
+  const quotes = useMarketStore((state) => state.quotes);
+  const hasMarketHydrated = useMarketStore((state) => state._hasHydrated);
+  const setSelectedSymbol = useMarketStore((state) => state.setSelectedSymbol);
+  const setQuotes = useMarketStore((state) => state.setQuotes);
+  const subscribe = useMarketStore((state) => state.subscribe);
   const [period, setPeriod] = useState("1d");
   const [adjust, setAdjust] = useState("qfq");
-  const [livePrice, setLivePrice] = useState<number | null>(null);
-  const [livePrices, setLivePrices] = useState<Record<string, number>>({});
   const [fullscreen, setFullscreen] = useState(false);
 
   // 搜索弹窗（空状态下引导选股 / 添加股票）
@@ -74,15 +79,59 @@ export default function MarketPage() {
     queryFn: marketService.getWatchlists,
   });
 
-  // 自动选中：有自选股但 URL 没指定 symbol 时，选第一只
+  const firstWatchlistSymbol = watchlists
+    ?.flatMap((list) => list.items)
+    .at(0)?.symbol;
+  const symbol = routeSymbol ?? selectedSymbol ?? firstWatchlistSymbol ?? null;
+  const stockName = useMemo(
+    () =>
+      watchlists
+        ?.flatMap((list) => list.items)
+        .find((item) => item.symbol === symbol)?.name ?? null,
+    [symbol, watchlists]
+  );
+  const resolvingInitialSymbol = !hasMarketHydrated || (wlLoading && !symbol);
+  const watchlistSymbols = useMemo(
+    () =>
+      Array.from(
+        new Set(
+          watchlists?.flatMap((list) =>
+            list.items.map((item) => item.symbol)
+          ) ?? []
+        )
+      ),
+    [watchlists]
+  );
+
+  const { data: quoteSnapshots } = useQuery({
+    queryKey: ["quote-snapshots", watchlistSymbols],
+    queryFn: () => marketService.getQuotes(watchlistSymbols),
+    enabled: watchlistSymbols.length > 0,
+    staleTime: 60_000,
+  });
+
   useEffect(() => {
-    if (!symbol && watchlists?.length && watchlists[0].items.length) {
-      const firstSymbol = watchlists[0].items[0].symbol;
+    if (quoteSnapshots?.length) setQuotes(quoteSnapshots);
+  }, [quoteSnapshots, setQuotes]);
+
+  // URL 用于可分享链接，store 用于跨页面保留最后一次选择。
+  useEffect(() => {
+    if (!hasMarketHydrated || !symbol) return;
+    if (selectedSymbol !== symbol) setSelectedSymbol(symbol);
+    if (!routeSymbol) {
       const params = new URLSearchParams(searchParams);
-      params.set("symbol", firstSymbol);
-      router.replace(`${pathname}?${params.toString()}`);
+      params.set("symbol", symbol);
+      router.replace(`/market?${params.toString()}`);
     }
-  }, [watchlists, symbol, searchParams, pathname, router]);
+  }, [
+    hasMarketHydrated,
+    routeSymbol,
+    router,
+    searchParams,
+    selectedSymbol,
+    setSelectedSymbol,
+    symbol,
+  ]);
 
   // K 线
   const { data: klineData, isLoading: klineLoading } = useQuery({
@@ -92,49 +141,35 @@ export default function MarketPage() {
     enabled: !!symbol,
   });
 
-  const { subscribe } = useMarketSocket({
-    onQuote: (msg) => {
-      setLivePrices((prev) => ({ ...prev, [msg.symbol]: msg.price }));
-      if (msg.symbol === symbol) setLivePrice(msg.price);
-    },
-  });
-
   useEffect(() => {
-    if (symbol) subscribe([symbol]);
-  }, [symbol, subscribe]);
-
-  useEffect(() => {
-    const symbols =
-      watchlists?.flatMap((list) => list.items.map((item) => item.symbol)) ??
-      [];
-
-    if (symbols.length) {
-      subscribe(Array.from(new Set(symbols)));
-    }
-  }, [watchlists, subscribe]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLivePrice(null);
-  }, [symbol]);
+    if (watchlistSymbols.length) subscribe(watchlistSymbols);
+  }, [watchlistSymbols, subscribe]);
 
   const selectSymbol = (sym: string) => {
+    setSelectedSymbol(sym);
     const params = new URLSearchParams(searchParams);
     params.set("symbol", sym);
-    router.replace(`${pathname}?${params.toString()}`);
+    router.replace(`/market?${params.toString()}`);
   };
 
+  const selectedQuote = symbol ? quotes[symbol] : undefined;
   const lastClose = klineData?.items?.[klineData.items.length - 1]?.close;
-  const displayPrice = livePrice ?? (lastClose ? parseFloat(lastClose) : null);
-  const prevClose = klineData?.items?.[klineData.items.length - 2]?.close;
+  const displayPrice =
+    selectedQuote?.price ?? (lastClose ? parseFloat(lastClose) : null);
+  const previousKlineClose = klineData?.items?.[klineData.items.length - 2]?.close;
+  const prevClose =
+    selectedQuote?.previous_close ??
+    (previousKlineClose ? parseFloat(previousKlineClose) : null);
   const change =
-    displayPrice !== null && prevClose
-      ? displayPrice - parseFloat(prevClose)
-      : null;
+    selectedQuote?.change ??
+    (displayPrice !== null && prevClose
+      ? displayPrice - prevClose
+      : null);
   const changePct =
-    displayPrice !== null && prevClose
-      ? ((displayPrice - parseFloat(prevClose)) / parseFloat(prevClose)) * 100
-      : null;
+    selectedQuote?.change_pct ??
+    (displayPrice !== null && prevClose
+      ? ((displayPrice - prevClose) / prevClose) * 100
+      : null);
 
   // Watchlist mutations
   const createMutation = useMutation({
@@ -222,13 +257,15 @@ export default function MarketPage() {
                       )}
                     >
                       {change > 0 ? "+" : ""}
-                      {change.toFixed(2)} (
+                      {Number(change).toFixed(2)} (
                       {changePct !== null ? formatPercent(changePct) : "--"})
                     </span>
                   )}
                 </>
               )}
             </>
+          ) : resolvingInitialSymbol ? (
+            <div className="h-5 w-40 animate-pulse rounded bg-muted" />
           ) : (
             <h1 className="text-sm text-muted-foreground">未选择股票</h1>
           )}
@@ -266,6 +303,8 @@ export default function MarketPage() {
                 </div>
               )}
             </div>
+          ) : resolvingInitialSymbol ? (
+            <div className="h-full animate-pulse bg-muted/30" />
           ) : (
             <div className="flex h-full flex-col items-center justify-center gap-3 bg-card p-4">
               <p className="text-sm text-muted-foreground">
@@ -316,15 +355,20 @@ export default function MarketPage() {
         <aside
           className={cn(
             "flex shrink-0 flex-col bg-card",
-            panel === "ai" ? "w-96" : "w-80"
+            panel === "backtest" || panel === "trading"
+              ? "w-96"
+              : "w-80"
           )}
         >
           {panel === "alerts" ? (
             <AlertPanel />
-          ) : panel === "ai" ? (
-            <AIPanel />
+          ) : panel === "backtest" ? (
+            <StrategyBacktestPanel key={symbol} symbol={symbol} />
+          ) : panel === "trading" ? (
+            <TradingPanel key={symbol} symbol={symbol} />
           ) : (
-            <div className="flex h-full flex-col overflow-hidden">
+            <div className="flex h-full min-h-0 flex-col overflow-hidden">
+              <div className="flex min-h-0 basis-[58%] flex-col overflow-hidden">
               {/* 顶栏 */}
               <div className="flex h-10 items-center justify-between px-3">
                 <h3 className="text-xs font-semibold">自选股</h3>
@@ -410,14 +454,16 @@ export default function MarketPage() {
                               <ul>
                                 {wl.items.map((item) => {
                                   const isActive = item.symbol === symbol;
+                                  const itemQuote = quotes[item.symbol];
                                   const itemPrice =
-                                    isActive && displayPrice !== null
-                                      ? displayPrice
-                                      : livePrices[item.symbol];
-                                  const itemChange = isActive ? change : null;
-                                  const itemChangePct = isActive
-                                    ? changePct
-                                    : null;
+                                    itemQuote?.price ??
+                                    (isActive ? displayPrice : null);
+                                  const itemChange =
+                                    itemQuote?.change ??
+                                    (isActive ? change : null);
+                                  const itemChangePct =
+                                    itemQuote?.change_pct ??
+                                    (isActive ? changePct : null);
 
                                   return (
                                     <li
@@ -487,6 +533,12 @@ export default function MarketPage() {
                   </div>
                 )}
               </div>
+              </div>
+              <StockAnalysisPanel
+                key={symbol ?? "empty"}
+                symbol={symbol}
+                stockName={stockName}
+              />
             </div>
           )}
         </aside>

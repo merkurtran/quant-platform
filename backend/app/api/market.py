@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from enum import Enum
 
@@ -14,18 +14,18 @@ from app.schemas.market import (
     CreateWatchlistRequest,
     StockSearchItem,
     StockSearchResponse,
+    QuoteSnapshot,
 )
 from app.services.market_service import (
-    get_klines,
     get_watchlists,
     add_watchlist_item,
     remove_watchlist_item,
     WatchlistNotFoundError,
     WatchlistItemAlreadyExistsError,
-    WatchlistItemNotFoundError,
     create_watchlist,
     get_klines_with_adjustment,
     search_stocks as _search_stocks_service,
+    get_quote_snapshots,
 )
 from shared.db.session import get_db
 from shared.market_data.adjustment import AdjustMethod
@@ -68,6 +68,18 @@ def list_klines(
         adjust=adjust.value,
         items=[KlineItem.model_validate(item) for item in items],
     )
+
+
+@router.get("/quotes", response_model=list[QuoteSnapshot])
+def list_quote_snapshots(
+    symbols: str = Query(..., min_length=1, max_length=1699),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    symbol_list = list(dict.fromkeys(symbol.strip() for symbol in symbols.split(",") if symbol.strip()))
+    if len(symbol_list) > 100:
+        raise BizException(BizErrorCode.VALIDATION_ERROR, "At most 100 symbols are allowed", status_code=422)
+    return [QuoteSnapshot.model_validate(item) for item in get_quote_snapshots(db, symbol_list)]
 
 
 @router.get("/watchlists", response_model=list[WatchlistPublic])
