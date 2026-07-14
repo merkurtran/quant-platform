@@ -42,6 +42,12 @@ class TestNormalizeSymbol:
     def test_beijing_exchange(self):
         assert normalize_symbol("430047") == "430047.BJ"
 
+    def test_keeps_canonical_symbol(self):
+        assert normalize_symbol("600519.SH") == "600519.SH"
+
+    def test_normalizes_lowercase_suffix(self):
+        assert normalize_symbol("000001.sz") == "000001.SZ"
+
     def test_invalid_non_digit_raises(self):
         with pytest.raises(ValueError, match="Invalid A-share code"):
             normalize_symbol("SH600519")

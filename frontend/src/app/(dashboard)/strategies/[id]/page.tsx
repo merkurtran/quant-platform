@@ -8,6 +8,11 @@ import { ArrowLeft, Play, Save } from "lucide-react";
 import { strategyService } from "@/services/strategies";
 import { StrategyEditorWorkspace } from "@/components/strategy/strategy-editor-workspace";
 import { StrategySettingsPanel } from "@/components/strategy/strategy-settings-panel";
+import {
+  fieldsToParams,
+  paramsToFields,
+  type StrategyParameterField,
+} from "@/lib/strategy-parameters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { STRATEGY_STATUS_LABELS } from "@/constants";
@@ -23,7 +28,7 @@ export default function StrategyDetailPage() {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [code, setCode] = useState("");
-  const [paramsJson, setParamsJson] = useState("{}");
+  const [parameterFields, setParameterFields] = useState<StrategyParameterField[]>([]);
 
   const strategyQuery = useQuery({
     queryKey: ["strategy", strategyId],
@@ -39,18 +44,13 @@ export default function StrategyDetailPage() {
       setName(strategy.name);
       setDescription(strategy.description ?? "");
       setCode(strategy.code);
-      setParamsJson(JSON.stringify(strategy.params, null, 2));
+      setParameterFields(paramsToFields(strategy.params));
     }
   }, [strategyQuery.data]);
 
   const saveMutation = useMutation({
     mutationFn: async () => {
-      let parsedParams: Record<string, unknown>;
-      try {
-        parsedParams = JSON.parse(paramsJson) as Record<string, unknown>;
-      } catch {
-        throw new Error("INVALID_PARAMS_JSON");
-      }
+      const parsedParams = fieldsToParams(parameterFields);
       const payload = {
         name,
         description: description || undefined,
@@ -68,8 +68,13 @@ export default function StrategyDetailPage() {
       if (isNew) router.push(`/strategies/${savedStrategy.id}`);
     },
     onError: (error) => {
-      if (error instanceof Error && error.message === "INVALID_PARAMS_JSON") {
-        toast.error("策略参数必须是有效的 JSON 对象");
+      if (!(error instanceof Error)) return;
+      if (error.message === "INVALID_PARAMETER_NAME") {
+        toast.error("参数名不能为空");
+      } else if (error.message.startsWith("DUPLICATE_PARAMETER:")) {
+        toast.error(`参数名不能重复：${error.message.split(":")[1]}`);
+      } else if (error.message.startsWith("INVALID_PARAMETER_VALUE:")) {
+        toast.error(`参数值格式有误：${error.message.split(":")[1]}`);
       }
     },
   });
@@ -78,7 +83,7 @@ export default function StrategyDetailPage() {
     setName(draft.name);
     setDescription(draft.description);
     setCode(draft.code);
-    setParamsJson(JSON.stringify(draft.params, null, 2));
+    setParameterFields(paramsToFields(draft.params));
     toast.success("AI 草稿已应用，请检查后保存");
   };
 
@@ -157,9 +162,9 @@ export default function StrategyDetailPage() {
         />
         <StrategySettingsPanel
           currentName={name}
-          paramsJson={paramsJson}
+          parameterFields={parameterFields}
           disabled={isArchived}
-          onParamsChange={setParamsJson}
+          onParametersChange={setParameterFields}
           onApplyDraft={applyDraft}
         />
       </main>

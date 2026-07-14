@@ -7,6 +7,7 @@ import { aiService } from "@/services/ai";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import type { StrategyDraft } from "@/types";
+import { toast } from "sonner";
 
 interface StrategyCopilotProps {
   currentName: string;
@@ -23,9 +24,17 @@ export function StrategyCopilot({
   const [draft, setDraft] = useState<StrategyDraft | null>(null);
 
   const mutation = useMutation({
-    mutationFn: () => aiService.generateStrategyDraft(prompt, currentName),
+    mutationFn: () => aiService.generateStrategyDraft(prompt.trim(), currentName),
     onSuccess: setDraft,
   });
+
+  const generateDraft = () => {
+    if (prompt.trim().length < 5) {
+      toast.warning("请至少输入 5 个字描述策略逻辑");
+      return;
+    }
+    mutation.mutate();
+  };
 
   return (
     <section className="bg-muted/20 p-4">
@@ -48,8 +57,8 @@ export function StrategyCopilot({
         <Button
           className="w-full"
           size="sm"
-          onClick={() => mutation.mutate()}
-          disabled={disabled || mutation.isPending || prompt.trim().length < 5}
+          onClick={generateDraft}
+          disabled={disabled || mutation.isPending}
         >
           {mutation.isPending ? (
             <Loader2 className="h-4 w-4 animate-spin" />

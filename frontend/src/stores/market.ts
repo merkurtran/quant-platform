@@ -59,6 +59,20 @@ function mergeQuote(
   };
 }
 
+function currentQuoteIsNewer(
+  current: QuoteMessage | undefined,
+  incoming: QuoteMessage
+): boolean {
+  if (!current) return false;
+  const currentTimestamp = Date.parse(current.ts);
+  const incomingTimestamp = Date.parse(incoming.ts);
+  return (
+    !Number.isNaN(currentTimestamp) &&
+    !Number.isNaN(incomingTimestamp) &&
+    currentTimestamp > incomingTimestamp
+  );
+}
+
 export const useMarketStore = create<MarketState>()(
   persist(
     (set) => ({
@@ -68,20 +82,23 @@ export const useMarketStore = create<MarketState>()(
       _hasHydrated: false,
       setSelectedSymbol: (selectedSymbol) => set({ selectedSymbol }),
       setQuote: (quote) =>
-        set((state) => ({
-          quotes: {
-            ...state.quotes,
-            [quote.symbol]: mergeQuote(state.quotes[quote.symbol], quote),
-          },
-        })),
+        set((state) => {
+          const current = state.quotes[quote.symbol];
+          return {
+            quotes: {
+              ...state.quotes,
+              [quote.symbol]: currentQuoteIsNewer(current, quote)
+                ? mergeQuote(quote, current)
+                : mergeQuote(current, quote),
+            },
+          };
+        }),
       setQuotes: (quotes) =>
         set((state) => {
           const merged = { ...state.quotes };
           for (const quote of quotes) {
             const current = merged[quote.symbol];
-            const currentIsNewer =
-              current && Date.parse(current.ts) >= Date.parse(quote.ts);
-            merged[quote.symbol] = currentIsNewer
+            merged[quote.symbol] = currentQuoteIsNewer(current, quote)
               ? mergeQuote(quote, current)
               : mergeQuote(current, quote);
           }

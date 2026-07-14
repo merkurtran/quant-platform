@@ -29,6 +29,7 @@ from app.services.market_service import (
 )
 from shared.db.session import get_db
 from shared.market_data.adjustment import AdjustMethod
+from shared.redis_client import get_redis_client
 
 
 class PublicAdjustParam(str, Enum):
@@ -79,7 +80,10 @@ def list_quote_snapshots(
     symbol_list = list(dict.fromkeys(symbol.strip() for symbol in symbols.split(",") if symbol.strip()))
     if len(symbol_list) > 100:
         raise BizException(BizErrorCode.VALIDATION_ERROR, "At most 100 symbols are allowed", status_code=422)
-    return [QuoteSnapshot.model_validate(item) for item in get_quote_snapshots(db, symbol_list)]
+    return [
+        QuoteSnapshot.model_validate(item)
+        for item in get_quote_snapshots(db, symbol_list, get_redis_client())
+    ]
 
 
 @router.get("/watchlists", response_model=list[WatchlistPublic])

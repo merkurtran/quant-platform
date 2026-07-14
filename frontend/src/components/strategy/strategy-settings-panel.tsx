@@ -1,21 +1,22 @@
 import { Braces } from "lucide-react";
 import { StrategyCopilot } from "@/components/panels/strategy-copilot";
-import { Textarea } from "@/components/ui/textarea";
+import { StrategyParameterEditor } from "@/components/strategy/strategy-parameter-editor";
+import type { StrategyParameterField } from "@/lib/strategy-parameters";
 import type { StrategyDraft } from "@/types";
 
 interface StrategySettingsPanelProps {
   currentName: string;
-  paramsJson: string;
+  parameterFields: StrategyParameterField[];
   disabled?: boolean;
-  onParamsChange: (value: string) => void;
+  onParametersChange: (fields: StrategyParameterField[]) => void;
   onApplyDraft: (draft: StrategyDraft) => void;
 }
 
 export function StrategySettingsPanel({
   currentName,
-  paramsJson,
+  parameterFields,
   disabled = false,
-  onParamsChange,
+  onParametersChange,
   onApplyDraft,
 }: StrategySettingsPanelProps) {
   return (
@@ -28,13 +29,10 @@ export function StrategySettingsPanel({
             <p className="text-xs text-muted-foreground">回测时可覆盖这些默认值</p>
           </div>
         </div>
-        <Textarea
-          id="params"
-          value={paramsJson}
-          onChange={(event) => onParamsChange(event.target.value)}
-          className="min-h-44 resize-y bg-muted/30 font-mono text-xs leading-5 tabular-nums"
-          spellCheck={false}
+        <StrategyParameterEditor
+          fields={parameterFields}
           disabled={disabled}
+          onChange={onParametersChange}
         />
       </section>
 

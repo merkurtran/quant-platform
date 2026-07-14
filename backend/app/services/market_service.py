@@ -1,3 +1,9 @@
+import json
+from datetime import datetime
+from decimal import Decimal
+
+from redis import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import func, tuple_
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -46,9 +52,9 @@ def get_klines(db: Session, symbol: str, period: str, limit: int | None = 300, s
     if end:
         q = q.filter(Klines.ts <= end)
     if limit is not None:
-        return q.order_by(Klines.ts.asc()).limit(limit).all()
-    else:
-         return q.order_by(Klines.ts.asc()).all()
+        latest = q.order_by(Klines.ts.desc()).limit(limit).all()
+        return list(reversed(latest))
+    return q.order_by(Klines.ts.asc()).all()
 
 
 def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int, adjust: AdjustMethod, start: str | None = None, end: str | None = None) -> list[dict]:
@@ -73,7 +79,59 @@ def get_klines_with_adjustment(db: Session, symbol: str, period: str, limit: int
     return calculate_adjusted_prices(raw_dicts, actions, adjust)
 
 
-def get_quote_snapshots(db: Session, symbols: list[str]) -> list[dict]:
+def _quote_timestamp(value: datetime | str) -> datetime:
+    parsed = value if isinstance(value, datetime) else datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return parsed.replace(tzinfo=None)
+
+
+def _merge_cached_quotes(
+    snapshots: list[dict], symbols: list[str], cache: Redis | None
+) -> list[dict]:
+    if cache is None or not symbols:
+        return snapshots
+    try:
+        cached_values = cache.mget([f"latest_price:{symbol}" for symbol in symbols])
+    except RedisError:
+        return snapshots
+
+    by_symbol = {snapshot["symbol"]: snapshot for snapshot in snapshots}
+    for symbol, raw_value in zip(symbols, cached_values, strict=True):
+        if not raw_value:
+            continue
+        try:
+            payload = json.loads(raw_value)
+            cached_ts = _quote_timestamp(payload["ts"])
+            current = by_symbol.get(symbol)
+            if current and _quote_timestamp(current["ts"]) > cached_ts:
+                continue
+            price = payload["price"]
+            previous_close = payload.get("previous_close")
+            if previous_close is None and current:
+                previous_close = current.get("previous_close")
+            change = payload.get("change")
+            if change is None and previous_close is not None:
+                change = Decimal(str(price)) - Decimal(str(previous_close))
+            change_pct = payload.get("change_pct")
+            if change_pct is None and change is not None and previous_close:
+                change_pct = (
+                    Decimal(str(change)) / Decimal(str(previous_close)) * 100
+                )
+            by_symbol[symbol] = {
+                "symbol": symbol,
+                "price": price,
+                "previous_close": previous_close,
+                "change": change,
+                "change_pct": change_pct,
+                "ts": payload["ts"],
+            }
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            continue
+    return [by_symbol[symbol] for symbol in symbols if symbol in by_symbol]
+
+
+def get_quote_snapshots(
+    db: Session, symbols: list[str], cache: Redis | None = None
+) -> list[dict]:
     daily_ranked = (
         db.query(
             Klines.symbol.label("symbol"),
@@ -188,7 +246,7 @@ def get_quote_snapshots(db: Session, symbols: list[str]) -> list[dict]:
                 "ts": latest.ts,
             }
         )
-    return snapshots
+    return _merge_cached_quotes(snapshots, symbols, cache)
 
 
 def get_watchlists(db: Session, user_id: int) -> list[Watchlists]:

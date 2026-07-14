@@ -30,14 +30,20 @@ EXCHANGE_PREFIX_MAP: dict[str, str] = {
 
 
 def normalize_symbol(raw_symbol: str) -> str:
-    """把 AKShare 的纯数字代码转成带交易所后缀格式"""
-    if not raw_symbol.isdigit():
+    """把纯数字或标准代码统一为带交易所后缀格式。"""
+    normalized = raw_symbol.upper()
+    code, separator, supplied_suffix = normalized.partition(".")
+    if not code.isdigit() or (separator and not supplied_suffix):
         raise ValueError(f"Invalid A-share code (expected digits): {raw_symbol!r}")
-    prefix = raw_symbol[0]
+    prefix = code[0]
     suffix = EXCHANGE_PREFIX_MAP.get(prefix)
     if suffix is None:
         raise ValueError(f"Unknown exchange for symbol {raw_symbol!r}: prefix '{prefix}' not in {list(EXCHANGE_PREFIX_MAP.keys())}")
-    return f"{raw_symbol}.{suffix}"
+    if supplied_suffix and supplied_suffix != suffix:
+        raise ValueError(
+            f"Invalid exchange suffix for {raw_symbol!r}: expected {suffix}"
+        )
+    return f"{code}.{suffix}"
 
 
 def _save_klines(rows: list[dict]) -> None:
