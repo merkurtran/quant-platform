@@ -72,10 +72,10 @@ class AKShareProvider(MarketDataProvider):
 
     def get_all_symbols(self) -> list[str]:
         try:
-            df = ak.stock_zh_a_spot_em()
+            df = ak.stock_info_a_code_name()
         except Exception as e:
             raise SymbolNotFoundError(f"Failed to fetch symbol list: {e}") from e
-        return df["代码"].tolist()
+        return df["code"].tolist()
 
     _spot_cache: dict = {"df": None, "ts": 0.0}
 
@@ -87,7 +87,7 @@ class AKShareProvider(MarketDataProvider):
         if cls._spot_cache["df"] is not None and now - cls._spot_cache["ts"] < 60:
             return cls._spot_cache["df"]
         try:
-            df = ak.stock_zh_a_spot_em()
+            df = ak.stock_info_a_code_name()
         except Exception as e:
             raise DataSourceConnectionError(f"Failed to fetch stock list: {e}") from e
         cls._spot_cache["df"] = df
@@ -100,12 +100,12 @@ class AKShareProvider(MarketDataProvider):
         df = self._get_spot_df()
         kw = keyword.strip().lower()
         mask = (
-            df["代码"].astype(str).str.lower().str.contains(kw, na=False)
-            | df["名称"].astype(str).str.lower().str.contains(kw, na=False)
+            df["code"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["name"].astype(str).str.lower().str.contains(kw, na=False)
         )
         matched = df[mask].head(limit)
         return [
-            {"symbol": normalize_symbol(row["代码"]), "name": row["名称"]}
+            {"symbol": normalize_symbol(row["code"]), "name": row["name"]}
             for _, row in matched.iterrows()
         ]
     

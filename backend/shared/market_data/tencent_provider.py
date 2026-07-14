@@ -55,7 +55,7 @@ class TencentProvider(MarketDataProvider):
             "high": _safe_decimal(row[3]),
             "low": _safe_decimal(row[4]),
             "volume": _safe_decimal(row[5]) if len(row) > 5 else None,
-            "amount": _safe_decimal(row[6]) if len(row) > 6 else None,
+            "amount": None,
         }
 
     def get_daily_kline(self, symbol: str, start_date: str) -> list[dict]:

@@ -1,5 +1,10 @@
 import logging
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.redis_client import get_redis_client
 from shared.db.session import SessionLocal

@@ -1,14 +1,18 @@
 import concurrent.futures
+import sys
 from datetime import datetime, time
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from apscheduler.schedulers.blocking import BlockingScheduler
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from shared.logging_config import setup_logging, get_logger
 from workers.market_worker.fetcher import (
     fetch_daily_kline,
     fetch_minute_kline,
-    get_watchlist_symbols,
     get_minute_kline_symbols,
     get_all_a_share_symbols,
     sync_corporate_actions

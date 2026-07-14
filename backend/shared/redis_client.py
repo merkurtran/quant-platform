@@ -21,6 +21,7 @@ def get_redis_client() -> redis.Redis:
         _redis_client = redis.Redis.from_url(
             settings.redis.url,
             decode_responses=True,
+            socket_timeout=10,
             socket_keepalive=True,
             retry_on_timeout=True,
             health_check_interval=30,
@@ -36,6 +37,7 @@ def get_async_redis_client() -> redis_asyncio.Redis:
         _async_redis_client = redis_asyncio.from_url(
             settings.redis.url,
             decode_responses=True,
+            socket_timeout=10,
             socket_keepalive=True,
             retry_on_timeout=True,
             max_connections=20,
