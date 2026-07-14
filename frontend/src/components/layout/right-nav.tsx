@@ -29,7 +29,7 @@ export function RightNav() {
   const { theme, toggleTheme, _hasHydrated } = useThemeStore();
 
   return (
-    <nav className="flex w-12 shrink-0 flex-col items-center bg-muted/30 py-3">
+    <nav className="flex w-12 shrink-0 flex-col items-center bg-card py-3">
       {/* 居中的导航图标 */}
       <div className="flex flex-1 flex-col items-center gap-1">
         {NAV_ITEMS.map((item) => {
@@ -55,8 +55,8 @@ export function RightNav() {
               className={cn(
                 "group relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
                 isActive
-                  ? "bg-primary/15 text-primary"
-                  : "text-muted-foreground hover:bg-accent hover:text-foreground"
+                  ? "bg-muted text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <Icon className="h-5 w-5" strokeWidth={1.5} />
@@ -72,7 +72,7 @@ export function RightNav() {
       {_hasHydrated && (
         <button
           onClick={toggleTheme}
-          className="group relative mt-auto flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          className="group relative mt-auto flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="切换主题"
         >
           {theme === "light" ? (

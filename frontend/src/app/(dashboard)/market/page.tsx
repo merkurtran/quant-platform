@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Maximize2, Minimize2, Search } from "lucide-react";
+import { ChevronDown, Plus, Maximize2, Minimize2, Search } from "lucide-react";
 import { marketService } from "@/services/market";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,17 +65,14 @@ export default function MarketPage() {
   // Watchlist
   const [createOpen, setCreateOpen] = useState(false);
   const [newListName, setNewListName] = useState("");
-  const [activeListId, setActiveListId] = useState<number | null>(null);
+  const [collapsedListIds, setCollapsedListIds] = useState<Set<number>>(
+    () => new Set()
+  );
 
   const { data: watchlists, isLoading: wlLoading } = useQuery({
     queryKey: ["watchlists"],
     queryFn: marketService.getWatchlists,
   });
-
-  const currentList =
-    watchlists?.find(
-      (w: Watchlist) => w.id === (activeListId ?? watchlists?.[0]?.id)
-    ) ?? null;
 
   // 自动选中：有自选股但 URL 没指定 symbol 时，选第一只
   useEffect(() => {
@@ -107,10 +104,14 @@ export default function MarketPage() {
   }, [symbol, subscribe]);
 
   useEffect(() => {
-    if (currentList?.items.length) {
-      subscribe(currentList.items.map((item) => item.symbol));
+    const symbols =
+      watchlists?.flatMap((list) => list.items.map((item) => item.symbol)) ??
+      [];
+
+    if (symbols.length) {
+      subscribe(Array.from(new Set(symbols)));
     }
-  }, [currentList, subscribe]);
+  }, [watchlists, subscribe]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -127,9 +128,11 @@ export default function MarketPage() {
   const displayPrice = livePrice ?? (lastClose ? parseFloat(lastClose) : null);
   const prevClose = klineData?.items?.[klineData.items.length - 2]?.close;
   const change =
-    displayPrice && prevClose ? displayPrice - parseFloat(prevClose) : null;
+    displayPrice !== null && prevClose
+      ? displayPrice - parseFloat(prevClose)
+      : null;
   const changePct =
-    displayPrice && prevClose
+    displayPrice !== null && prevClose
       ? ((displayPrice - parseFloat(prevClose)) / parseFloat(prevClose)) * 100
       : null;
 
@@ -180,10 +183,22 @@ export default function MarketPage() {
     }
   };
 
+  const toggleListCollapsed = (id: number) => {
+    setCollapsedListIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
   return (
-    <div className="flex h-full overflow-hidden">
-      {/* ── 主区（K线 + 周期） — 浅灰底，区别于侧边栏白底 ── */}
-      <div className="flex flex-1 flex-col overflow-hidden bg-background">
+    <div className="flex h-full gap-px overflow-hidden bg-border/70">
+      {/* ── 主区（K线 + 周期） — 用浅灰缝隙分隔工具栏与图表 ── */}
+      <div className="flex flex-1 flex-col gap-px overflow-hidden bg-border/60">
         {/* 顶部信息栏 — 白底浮于浅灰底之上 */}
         <div className="flex h-12 items-center gap-4 bg-card px-4">
           {symbol ? (
@@ -208,7 +223,7 @@ export default function MarketPage() {
                     >
                       {change > 0 ? "+" : ""}
                       {change.toFixed(2)} (
-                      {changePct && formatPercent(changePct)})
+                      {changePct !== null ? formatPercent(changePct) : "--"})
                     </span>
                   )}
                 </>
@@ -233,10 +248,10 @@ export default function MarketPage() {
           </Button>
         </div>
 
-        {/* K 线图区域 — 白色卡片浮于灰底 */}
-        <div className="flex-1 overflow-hidden p-2">
+        {/* K 线图区域 — 连续白色工作区 */}
+        <div className="flex-1 overflow-hidden bg-card">
           {symbol ? (
-            <div className="h-full overflow-hidden rounded-lg bg-card">
+            <div className="h-full overflow-hidden bg-card">
               {klineLoading ? (
                 <div className="h-full animate-pulse bg-muted/30" />
               ) : klineData && klineData.items.length > 0 ? (
@@ -252,7 +267,7 @@ export default function MarketPage() {
               )}
             </div>
           ) : (
-            <div className="flex h-full flex-col items-center justify-center gap-3 p-4">
+            <div className="flex h-full flex-col items-center justify-center gap-3 bg-card p-4">
               <p className="text-sm text-muted-foreground">
                 选择股票查看 K 线
               </p>
@@ -296,7 +311,7 @@ export default function MarketPage() {
         </div>
       </div>
 
-      {/* ── 右侧面板 — 白底卡（明显比主区深/浅一档） ── */}
+      {/* ── 右侧面板 — TradingView 风格白色信息栏 ── */}
       {!fullscreen && (
         <aside
           className={cn(
@@ -323,104 +338,155 @@ export default function MarketPage() {
                 </Button>
               </div>
 
-              {/* Tab 切换 — 用 muted 背景色块分隔，无下划线 */}
-              {watchlists && watchlists.length > 0 && (
-                <div className="flex overflow-x-auto bg-muted/30 px-2 py-1">
-                  {watchlists.map((wl: Watchlist) => (
-                    <button
-                      key={wl.id}
-                      onClick={() => setActiveListId(wl.id)}
-                      className={cn(
-                        "rounded-full px-3 py-0.5 text-xs font-medium transition-colors whitespace-nowrap",
-                        wl.id === (activeListId ?? watchlists[0].id)
-                          ? "bg-card text-foreground shadow-sm"
-                          : "text-muted-foreground hover:text-foreground"
-                      )}
-                    >
-                      {wl.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* 列表 — 行间用 muted/30 交替色块，无 border-b */}
-              <div className="flex-1 overflow-y-auto">
-                {wlLoading ? (
-                  <div className="p-3 text-center text-xs text-muted-foreground">
-                    加载中...
-                  </div>
-                ) : currentList?.items.length === 0 ? (
-                  <div className="px-3 py-6 text-center text-xs text-muted-foreground">
-                    暂无股票
-                  </div>
-                ) : (
-                  <ul>
-                    {currentList?.items.map((item, i) => {
-                      const isActive = item.symbol === symbol;
-                      return (
-                        <li
-                          key={item.symbol}
-                          onClick={() => selectSymbol(item.symbol)}
-                          className={cn(
-                            "group flex cursor-pointer items-center gap-2 px-3 py-1.5 text-xs transition-colors",
-                            isActive
-                              ? "bg-primary/10"
-                              : i % 2 === 0
-                              ? "hover:bg-accent"
-                              : "bg-muted/20 hover:bg-accent"
-                          )}
-                        >
-                          <div className="flex-1 truncate">
-                            <div
-                              className={cn(
-                                "font-medium tabular-nums",
-                                isActive && "text-primary"
-                              )}
-                            >
-                              {item.symbol}
-                            </div>
-                            <div className="truncate text-[10px] text-muted-foreground">
-                              {item.name ?? "—"}
-                            </div>
-                          </div>
-                          <div className="w-16 text-right tabular-nums text-muted-foreground">
-                            {livePrices[item.symbol] != null
-                              ? formatPrice(livePrices[item.symbol])
-                              : "--"}
-                          </div>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              removeItemMutation.mutate({
-                                watchlistId: currentList.id,
-                                sym: item.symbol,
-                              });
-                            }}
-                            className="shrink-0 text-muted-foreground opacity-0 transition-opacity hover:text-danger group-hover:opacity-100"
-                          >
-                            ×
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
+              <div className="grid h-8 grid-cols-[minmax(0,1fr)_64px_52px_52px] items-center gap-2 bg-muted/50 px-3 text-[11px] text-muted-foreground">
+                <span>Symbol</span>
+                <span className="text-right">Last</span>
+                <span className="text-right">Chg</span>
+                <span className="text-right">Chg%</span>
               </div>
 
-              {/* 底部添加 */}
-              {currentList && (
-                <div className="bg-muted/30 p-1.5">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-7 w-full justify-start text-xs"
-                    onClick={() => setAddOpen(currentList.id)}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    添加股票
-                  </Button>
-                </div>
-              )}
+              <div className="flex-1 overflow-y-auto">
+                {wlLoading ? (
+                  <div className="space-y-1 p-2">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div
+                        key={i}
+                        className="h-8 animate-pulse rounded bg-muted/70"
+                      />
+                    ))}
+                  </div>
+                ) : !watchlists || watchlists.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center gap-2 px-3 text-center">
+                    <p className="text-xs text-muted-foreground">
+                      暂无自选股分组
+                    </p>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() => setCreateOpen(true)}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      新建分组
+                    </Button>
+                  </div>
+                ) : (
+                  <div>
+                    {watchlists.map((wl: Watchlist) => {
+                      const collapsed = collapsedListIds.has(wl.id);
+
+                      return (
+                        <section key={wl.id}>
+                          <div className="flex h-8 items-center bg-muted/40 px-2">
+                            <button
+                              onClick={() => toggleListCollapsed(wl.id)}
+                              className="flex min-w-0 flex-1 items-center gap-1 text-left text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"
+                            >
+                              <ChevronDown
+                                className={cn(
+                                  "h-3.5 w-3.5 shrink-0 transition-transform",
+                                  collapsed && "-rotate-90"
+                                )}
+                              />
+                              <span className="truncate">{wl.name}</span>
+                            </button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={() => setAddOpen(wl.id)}
+                              title="添加股票"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+
+                          {!collapsed &&
+                            (wl.items.length === 0 ? (
+                              <div className="px-6 py-3 text-xs text-muted-foreground">
+                                暂无股票
+                              </div>
+                            ) : (
+                              <ul>
+                                {wl.items.map((item) => {
+                                  const isActive = item.symbol === symbol;
+                                  const itemPrice =
+                                    isActive && displayPrice !== null
+                                      ? displayPrice
+                                      : livePrices[item.symbol];
+                                  const itemChange = isActive ? change : null;
+                                  const itemChangePct = isActive
+                                    ? changePct
+                                    : null;
+
+                                  return (
+                                    <li
+                                      key={item.symbol}
+                                      onClick={() => selectSymbol(item.symbol)}
+                                      className={cn(
+                                        "group grid cursor-pointer grid-cols-[minmax(0,1fr)_64px_52px_52px] items-center gap-2 px-3 py-1.5 text-xs transition-colors hover:bg-accent",
+                                        isActive &&
+                                          "relative z-10 bg-card outline outline-1 -outline-offset-1 outline-foreground/70"
+                                      )}
+                                    >
+                                      <div className="min-w-0">
+                                        <div className="truncate font-medium tabular-nums">
+                                          {item.symbol}
+                                        </div>
+                                        <div className="truncate text-[10px] text-muted-foreground">
+                                          {item.name ?? "—"}
+                                        </div>
+                                      </div>
+                                      <div className="text-right tabular-nums text-muted-foreground">
+                                        {itemPrice != null
+                                          ? formatPrice(itemPrice)
+                                          : "--"}
+                                      </div>
+                                      <div
+                                        className={cn(
+                                          "text-right tabular-nums text-muted-foreground",
+                                          itemChange !== null &&
+                                            priceColor(itemChange)
+                                        )}
+                                      >
+                                        {itemChange !== null
+                                          ? `${itemChange > 0 ? "+" : ""}${itemChange.toFixed(2)}`
+                                          : "--"}
+                                      </div>
+                                      <div
+                                        className={cn(
+                                          "relative text-right tabular-nums text-muted-foreground",
+                                          itemChange !== null &&
+                                            priceColor(itemChange)
+                                        )}
+                                      >
+                                        {itemChangePct !== null
+                                          ? formatPercent(itemChangePct)
+                                          : "--"}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            removeItemMutation.mutate({
+                                              watchlistId: wl.id,
+                                              sym: item.symbol,
+                                            });
+                                          }}
+                                          className="absolute right-0 top-1/2 hidden -translate-y-1/2 bg-card px-1 text-sm text-muted-foreground hover:text-danger group-hover:block"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            ))}
+                        </section>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </aside>

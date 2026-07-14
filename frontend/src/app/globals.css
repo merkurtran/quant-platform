@@ -7,7 +7,7 @@
   --radius: 0.5rem; /* 8px */
 
   /* 主内容区：浅灰底 */
-  --background: #f5f6f8;
+  --background: #f0f3fa;
   --foreground: #111827;
 
   /* 卡片/侧边栏：白底浮于灰底之上 */
@@ -20,20 +20,20 @@
   --primary: #2563eb;
   --primary-foreground: #ffffff;
 
-  --secondary: #eef0f4;
+  --secondary: #f0f3fa;
   --secondary-foreground: #111827;
 
-  --muted: #eef0f4;
+  --muted: #f0f3fa;
   --muted-foreground: #6b7280;
 
-  --accent: #eef0f4;
+  --accent: #f4f6fb;
   --accent-foreground: #111827;
 
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 
-  --border: #e5e7eb;
-  --input: #e5e7eb;
+  --border: #e0e3eb;
+  --input: #d1d4dc;
   --ring: #2563eb;
 
   /* 业务语义色 */
@@ -45,6 +45,24 @@
   --up: #ef4444;
   --down: #22c55e;
   --flat: #6b7280;
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #131722;
+  --foreground: #d1d4dc;
+  --card: #1e222d;
+  --card-foreground: #d1d4dc;
+  --popover: #1e222d;
+  --popover-foreground: #d1d4dc;
+  --secondary: #2a2e39;
+  --secondary-foreground: #d1d4dc;
+  --muted: #2a2e39;
+  --muted-foreground: #868993;
+  --accent: #2a2e39;
+  --accent-foreground: #d1d4dc;
+  --border: #2a2e39;
+  --input: #363a45;
 }
 
 @theme inline {
@@ -95,23 +113,6 @@
     font-variant-numeric: tabular-nums;
   }
 
-  /* 暗色模式：主区深灰，侧边栏更深一档 */
-  .dark {
-    --background: #0a0a0a;
-    --foreground: #e5e7eb;
-    --card: #141414;
-    --card-foreground: #e5e7eb;
-    --popover: #1c1c1c;
-    --popover-foreground: #e5e7eb;
-    --secondary: #1c1c1c;
-    --secondary-foreground: #e5e7eb;
-    --muted: #1c1c1c;
-    --muted-foreground: #9ca3af;
-    --accent: #262626;
-    --accent-foreground: #e5e7eb;
-    --border: #2a2a2a;
-    --input: #2a2a2a;
-  }
   .dark input[type="date"],
   .dark input[type="datetime-local"],
   .dark input[type="time"] {

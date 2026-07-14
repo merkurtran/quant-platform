@@ -71,7 +71,7 @@ export function Navbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-12 items-center gap-4 bg-background/80 px-4 backdrop-blur">
+    <header className="sticky top-0 z-30 flex h-12 items-center gap-4 bg-card px-4">
       {/* Logo */}
       <Link href="/market" className="flex shrink-0 items-center gap-2">
         <TrendingUp className="h-5 w-5 text-primary" />
@@ -122,7 +122,7 @@ export function Navbar() {
           />
         </button>
         {userOpen && (
-          <div className="absolute right-0 top-full mt-1 w-48 rounded-lg bg-popover p-1 shadow-lg">
+          <div className="absolute right-0 top-full mt-1 w-48 rounded-lg bg-popover p-1 shadow-md">
             <div className="px-3 py-2">
               <p className="text-sm font-medium">{user?.nickname}</p>
               <p className="truncate text-xs text-muted-foreground">

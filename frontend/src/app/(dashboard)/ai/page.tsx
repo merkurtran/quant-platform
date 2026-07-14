@@ -37,11 +37,6 @@ export default function AIPage() {
     [messages, extraMessages]
   );
 
-  // 切换对话时清理本地追加的消息，避免跨对话残留
-  useEffect(() => {
-    setExtraMessages([]);
-  }, [activeId]);
-
   useEffect(() => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -52,6 +47,7 @@ export default function AIPage() {
     mutationFn: () => aiService.createConversation(),
     onSuccess: (conv) => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      setExtraMessages([]);
       setActiveId(conv.id);
     },
   });
@@ -110,7 +106,10 @@ export default function AIPage() {
         {conversations?.map((conv: Conversation) => (
           <button
             key={conv.id}
-            onClick={() => setActiveId(conv.id)}
+            onClick={() => {
+              setExtraMessages([]);
+              setActiveId(conv.id);
+            }}
             className={cn(
               "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm transition-colors",
               activeId === conv.id

@@ -44,10 +44,6 @@ export function StockSearch({
   const list = results ?? [];
 
   useEffect(() => {
-    setHighlightIndex(0);
-  }, [debounced]);
-
-  useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
@@ -96,6 +92,7 @@ export function StockSearch({
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
+            setHighlightIndex(0);
             setOpen(true);
           }}
           onFocus={() => query && setOpen(true)}
@@ -108,6 +105,7 @@ export function StockSearch({
             onClick={() => {
               setQuery("");
               setDebounced("");
+              setHighlightIndex(0);
               inputRef.current?.focus();
             }}
             className="shrink-0 text-muted-foreground hover:text-foreground"

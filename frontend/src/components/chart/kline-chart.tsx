@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import {
   createChart,
   CandlestickSeries,
@@ -11,7 +11,9 @@ import {
   type UTCTimestamp,
   ColorType,
   CrosshairMode,
+  LineStyle,
 } from "lightweight-charts";
+import { useThemeStore } from "@/stores/theme";
 import type { KlineItem } from "@/types";
 
 const UP_COLOR = "#ef4444"; // A 股红涨
@@ -20,29 +22,15 @@ const DOWN_COLOR = "#22c55e"; // A 股绿跌
 export function KlineChart({ data }: KlineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
-  const [isDark, setIsDark] = useState(false);
-
-  // 监听主题变化
-  useEffect(() => {
-    const update = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
+  const isDark = useThemeStore((state) => state.theme === "dark");
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const bg = isDark ? "#0a0a0a" : "#ffffff";
-    const textColor = isDark ? "#9ca3af" : "#6b7280";
-    const gridColor = isDark ? "#1c1c1c" : "#f8f9fb";
-    const borderColor = isDark ? "#2a2a2a" : "#e5e7eb";
+    const bg = isDark ? "#1e222d" : "#ffffff";
+    const textColor = isDark ? "#868993" : "#6a6d78";
+    const gridColor = isDark ? "#2a2e39" : "#f0f3fa";
+    const borderColor = isDark ? "#2a2e39" : "#e0e3eb";
 
     const chart = createChart(containerRef.current, {
       layout: {
@@ -51,8 +39,8 @@ export function KlineChart({ data }: KlineChartProps) {
         fontSize: 12,
       },
       grid: {
-        vertLines: { color: gridColor },
-        horzLines: { color: gridColor },
+        vertLines: { color: gridColor, style: LineStyle.Dotted },
+        horzLines: { color: gridColor, style: LineStyle.Dotted },
       },
       crosshair: {
         mode: CrosshairMode.Normal,

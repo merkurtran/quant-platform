@@ -35,10 +35,14 @@ export function StockSearchDialog({
 
   useEffect(() => {
     if (open) {
-      setQuery("");
-      setDebounced("");
-      setHighlightIndex(0);
-      setTimeout(() => inputRef.current?.focus(), 50);
+      const timer = window.setTimeout(() => {
+        setQuery("");
+        setDebounced("");
+        setHighlightIndex(0);
+        inputRef.current?.focus();
+      }, 50);
+
+      return () => window.clearTimeout(timer);
     }
   }, [open]);
 
@@ -61,10 +65,6 @@ export function StockSearchDialog({
     if (filter === "bj") return s.symbol.endsWith(".BJ");
     return true;
   });
-
-  useEffect(() => {
-    setHighlightIndex(0);
-  }, [debounced, filter]);
 
   const handleSelect = (stock: StockSearchResult) => {
     onSelect(stock);
@@ -110,7 +110,10 @@ export function StockSearchDialog({
             <input
               ref={inputRef}
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setHighlightIndex(0);
+              }}
               onKeyDown={handleKeyDown}
               placeholder="输入代码或名称搜索..."
               className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
@@ -126,7 +129,10 @@ export function StockSearchDialog({
           {FILTERS.map((f) => (
             <button
               key={f.key}
-              onClick={() => setFilter(f.key)}
+              onClick={() => {
+                setFilter(f.key);
+                setHighlightIndex(0);
+              }}
               className={cn(
                 "rounded-full px-3 py-0.5 text-xs font-medium transition-colors",
                 filter === f.key

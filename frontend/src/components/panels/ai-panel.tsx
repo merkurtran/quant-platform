@@ -24,26 +24,18 @@ export function AIPanel() {
     queryFn: aiService.listConversations,
   });
 
+  const activeConversationId = activeId ?? conversations?.[0]?.id ?? null;
+
   const { data: messages, isLoading: msgLoading } = useQuery({
-    queryKey: ["messages", activeId],
-    queryFn: () => aiService.listMessages(activeId!),
-    enabled: activeId !== null,
+    queryKey: ["messages", activeConversationId],
+    queryFn: () => aiService.listMessages(activeConversationId!),
+    enabled: activeConversationId !== null,
   });
 
   const displayMessages = useMemo(
     () => [...(messages ?? []), ...extraMessages],
     [messages, extraMessages]
   );
-
-  useEffect(() => {
-    setExtraMessages([]);
-  }, [activeId]);
-
-  useEffect(() => {
-    if (!activeId && conversations?.[0]) {
-      setActiveId(conversations[0].id);
-    }
-  }, [conversations, activeId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -55,26 +47,27 @@ export function AIPanel() {
     mutationFn: () => aiService.createConversation(),
     onSuccess: (conv) => {
       queryClient.invalidateQueries({ queryKey: ["conversations"] });
+      setExtraMessages([]);
       setActiveId(conv.id);
       setConvOpen(false);
     },
   });
 
   const sendMutation = useMutation({
-    mutationFn: () => aiService.sendMessage(activeId!, input),
+    mutationFn: () => aiService.sendMessage(activeConversationId!, input),
     onSuccess: (res) => {
       setExtraMessages((prev) => [
         ...prev,
         {
           id: Date.now(),
-          conversation_id: activeId!,
+          conversation_id: activeConversationId!,
           role: "user",
           content: { text: input },
           created_at: new Date().toISOString(),
         },
         {
           id: Date.now() + 1,
-          conversation_id: activeId!,
+          conversation_id: activeConversationId!,
           role: "assistant",
           content: { text: res.content },
           created_at: new Date().toISOString(),
@@ -92,7 +85,7 @@ export function AIPanel() {
   });
 
   const handleSend = () => {
-    if (!input.trim() || !activeId) return;
+    if (!input.trim() || !activeConversationId) return;
     setSending(true);
     sendMutation.mutate();
   };
@@ -127,12 +120,13 @@ export function AIPanel() {
             <button
               key={conv.id}
               onClick={() => {
+                setExtraMessages([]);
                 setActiveId(conv.id);
                 setConvOpen(false);
               }}
               className={cn(
                 "flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs transition-colors",
-                activeId === conv.id
+                activeConversationId === conv.id
                   ? "bg-primary/10 text-primary"
                   : "hover:bg-secondary"
               )}
@@ -151,7 +145,7 @@ export function AIPanel() {
         ref={scrollRef}
         className="flex-1 space-y-2 overflow-y-auto p-3"
       >
-        {activeId === null ? (
+        {activeConversationId === null ? (
           <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
             <Bot className="h-8 w-8 text-muted-foreground/50" />
             <p className="text-xs text-muted-foreground">
