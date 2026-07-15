@@ -27,6 +27,10 @@ import { StockSearchDialog } from "@/components/stock-search-dialog";
 import { AlertPanel } from "@/components/panels/alert-panel";
 import { StockAnalysisPanel } from "@/components/panels/stock-analysis-panel";
 import { StrategyBacktestPanel } from "@/components/panels/strategy-backtest-panel";
+import {
+  BacktestResult,
+  type BacktestResultViewModel,
+} from "@/components/panels/backtest-result";
 import { TradingPanel } from "@/components/panels/trading-panel";
 import { ADJUST_OPTIONS } from "@/constants";
 import { useMarketStore } from "@/stores/market";
@@ -62,6 +66,7 @@ export default function MarketPage() {
   const [period, setPeriod] = useState("1d");
   const [adjust, setAdjust] = useState("qfq");
   const [fullscreen, setFullscreen] = useState(false);
+  const [backtestResult, setBacktestResult] = useState<BacktestResultViewModel | null>(null);
 
   // 搜索弹窗（空状态下引导选股 / 添加股票）
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -146,6 +151,7 @@ export default function MarketPage() {
   }, [watchlistSymbols, subscribe]);
 
   const selectSymbol = (sym: string) => {
+    setBacktestResult(null);
     setSelectedSymbol(sym);
     const params = new URLSearchParams(searchParams);
     params.set("symbol", sym);
@@ -170,6 +176,10 @@ export default function MarketPage() {
     (displayPrice !== null && prevClose
       ? ((displayPrice - prevClose) / prevClose) * 100
       : null);
+  const showBacktestResult =
+    panel === "backtest" &&
+    backtestResult?.run.status === "success" &&
+    backtestResult.run.result !== null;
 
   // Watchlist mutations
   const createMutation = useMutation({
@@ -270,24 +280,28 @@ export default function MarketPage() {
             <h1 className="text-sm text-muted-foreground">未选择股票</h1>
           )}
           <div className="flex-1" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8"
-            onClick={() => setFullscreen((v) => !v)}
-            title="全屏 K 线"
-          >
-            {fullscreen ? (
-              <Minimize2 className="h-4 w-4" />
-            ) : (
-              <Maximize2 className="h-4 w-4" />
-            )}
-          </Button>
+          {!showBacktestResult && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              onClick={() => setFullscreen((v) => !v)}
+              title="全屏 K 线"
+            >
+              {fullscreen ? (
+                <Minimize2 className="h-4 w-4" />
+              ) : (
+                <Maximize2 className="h-4 w-4" />
+              )}
+            </Button>
+          )}
         </div>
 
         {/* K 线图区域 — 连续白色工作区 */}
         <div className="flex-1 overflow-hidden bg-card">
-          {symbol ? (
+          {showBacktestResult ? (
+            <BacktestResult backtest={backtestResult} />
+          ) : symbol ? (
             <div className="h-full overflow-hidden bg-card">
               {klineLoading ? (
                 <div className="h-full animate-pulse bg-muted/30" />
@@ -319,7 +333,7 @@ export default function MarketPage() {
         </div>
 
         {/* 周期切换 - 底部，白底浮于灰底 */}
-        <div className="flex h-10 items-center gap-1 bg-card px-3">
+        {!showBacktestResult && <div className="flex h-10 items-center gap-1 bg-card px-3">
           {QUICK_PERIODS.map((p) => (
             <button
               key={p.value}
@@ -347,7 +361,7 @@ export default function MarketPage() {
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </div>}
       </div>
 
       {/* ── 右侧面板 — TradingView 风格白色信息栏 ── */}
@@ -363,7 +377,11 @@ export default function MarketPage() {
           {panel === "alerts" ? (
             <AlertPanel />
           ) : panel === "backtest" ? (
-            <StrategyBacktestPanel key={symbol} symbol={symbol} />
+            <StrategyBacktestPanel
+              key={symbol}
+              symbol={symbol}
+              onResultChange={setBacktestResult}
+            />
           ) : panel === "trading" ? (
             <TradingPanel key={symbol} symbol={symbol} />
           ) : (

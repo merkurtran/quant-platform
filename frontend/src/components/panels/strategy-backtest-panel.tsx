@@ -1,16 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { Code2, Loader2, Pencil, Play } from "lucide-react";
+import { Loader2, Play } from "lucide-react";
 import { strategyService } from "@/services/strategies";
 import { useBacktestRun } from "@/hooks/use-backtest-run";
-import { BacktestResult } from "@/components/panels/backtest-result";
+import type { BacktestResultViewModel } from "@/components/panels/backtest-result";
+import {
+  BacktestEmptyState,
+  BacktestField,
+  BacktestPanelHeader,
+  BacktestStatus,
+} from "@/components/panels/strategy-backtest-states";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -22,9 +26,19 @@ import {
 
 interface StrategyBacktestPanelProps {
   symbol: string | null;
+  onResultChange?: (result: BacktestResultViewModel | null) => void;
 }
 
-export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
+interface RunContext {
+  runId: number;
+  strategyName: string;
+  symbol: string;
+  startDate: string;
+  endDate: string;
+  initialCapital: string;
+}
+
+export function StrategyBacktestPanel({ symbol, onResultChange }: StrategyBacktestPanelProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryStrategyId = Number(searchParams.get("strategyId"));
@@ -34,6 +48,7 @@ export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
   const [endDate, setEndDate] = useState(dayjs().format("YYYY-MM-DD"));
   const [capital, setCapital] = useState("1000000");
   const [backtestSymbol, setBacktestSymbol] = useState(symbol ?? "");
+  const [runContext, setRunContext] = useState<RunContext | null>(null);
   const { start, result, isRunning } = useBacktestRun();
 
   const { data: strategies, isLoading } = useQuery({
@@ -50,15 +65,29 @@ export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
     enabled: strategyId !== null,
   });
 
+  useEffect(() => {
+    if (!result || !runContext || result.run_id !== runContext.runId) return;
+    onResultChange?.({
+      run: result,
+      strategyName: runContext.strategyName,
+      symbol: runContext.symbol,
+      startDate: runContext.startDate,
+      endDate: runContext.endDate,
+      initialCapital: runContext.initialCapital,
+    });
+  }, [onResultChange, result, runContext]);
+
   const selectStrategy = (value: string) => {
+    onResultChange?.(null);
     const params = new URLSearchParams(searchParams);
     params.set("strategyId", value);
     router.replace(`/market?${params.toString()}`);
   };
 
-  const handleStart = () => {
+  const handleStart = async () => {
     if (!strategy || !backtestSymbol) return;
-    start({
+    onResultChange?.(null);
+    const runId = await start({
       strategyId: strategy.id,
       startDate,
       endDate,
@@ -66,20 +95,21 @@ export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
       symbols: [backtestSymbol],
       params: strategy.params,
     });
+    if (runId !== null) {
+      setRunContext({
+        runId,
+        strategyName: strategy.name,
+        symbol: backtestSymbol,
+        startDate,
+        endDate,
+        initialCapital: capital,
+      });
+    }
   };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      <div className="flex h-10 items-center justify-between px-3">
-        <h3 className="text-xs font-semibold">策略回测</h3>
-        {strategyId && (
-          <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
-            <Link href={`/strategies/${strategyId}`} title="编辑策略">
-              <Pencil className="h-3.5 w-3.5" />
-            </Link>
-          </Button>
-        )}
-      </div>
+      <BacktestPanelHeader strategyId={strategyId} />
 
       <div className="flex-1 space-y-4 overflow-y-auto border-t border-border/70 p-3">
         {isLoading ? (
@@ -88,13 +118,7 @@ export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
             <div className="h-32 animate-pulse rounded bg-muted" />
           </div>
         ) : !strategies?.length ? (
-          <div className="flex h-full flex-col items-center justify-center gap-3 text-center">
-            <Code2 className="h-8 w-8 text-muted-foreground" />
-            <p className="text-xs text-muted-foreground">暂无可回测策略</p>
-            <Button size="sm" asChild>
-              <Link href="/strategies/new">新建策略</Link>
-            </Button>
-          </div>
+          <BacktestEmptyState />
         ) : (
           <>
             <div className="space-y-1.5">
@@ -114,11 +138,11 @@ export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
             </div>
 
             <div className="grid grid-cols-2 gap-2">
-              <Field label="开始日期" type="date" value={startDate} onChange={setStartDate} />
-              <Field label="结束日期" type="date" value={endDate} onChange={setEndDate} />
+              <BacktestField label="开始日期" type="date" value={startDate} onChange={setStartDate} />
+              <BacktestField label="结束日期" type="date" value={endDate} onChange={setEndDate} />
             </div>
-            <Field label="回测标的" value={backtestSymbol} onChange={setBacktestSymbol} />
-            <Field label="初始资金" value={capital} onChange={setCapital} />
+            <BacktestField label="回测标的" value={backtestSymbol} onChange={setBacktestSymbol} />
+            <BacktestField label="初始资金" value={capital} onChange={setCapital} />
 
             <Button
               className="w-full"
@@ -130,26 +154,10 @@ export function StrategyBacktestPanel({ symbol }: StrategyBacktestPanelProps) {
               {isRunning ? "回测运行中" : "开始回测"}
             </Button>
 
-            {result && <BacktestResult result={result} />}
+            <BacktestStatus status={result?.status} errorMessage={result?.error_message} />
           </>
         )}
       </div>
-    </div>
-  );
-}
-
-interface FieldProps {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-}
-
-function Field({ label, value, onChange, type = "text" }: FieldProps) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs">{label}</Label>
-      <Input className="h-8 text-xs" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }

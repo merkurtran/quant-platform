@@ -45,6 +45,7 @@ export function useBacktestRun() {
 
   const start = async (input: StartBacktestInput) => {
     setIsStarting(true);
+    setRunId(null);
     notifiedRunId.current = null;
     try {
       const run = await strategyService.startBacktest(input.strategyId, {
@@ -56,8 +57,10 @@ export function useBacktestRun() {
       });
       setRunId(run.run_id);
       toast.success("回测已进入队列");
+      return run.run_id;
     } catch {
       toast.error("发起回测失败，请检查参数");
+      return null;
     } finally {
       setIsStarting(false);
     }
