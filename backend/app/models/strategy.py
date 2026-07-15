@@ -31,6 +31,12 @@ class BacktestRuns(Base):
     start_date: Mapped[date] = mapped_column(Date, nullable=False)
     end_date: Mapped[date] = mapped_column(Date, nullable=False)
     initial_capital: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
+    commission_rate: Mapped[Decimal] = mapped_column(
+        Numeric(10, 6), nullable=False, server_default="0.001000"
+    )
+    slippage_rate: Mapped[Decimal] = mapped_column(
+        Numeric(10, 6), nullable=False, server_default="0.000500"
+    )
     params_snapshot: Mapped[dict] = mapped_column(JSONB, nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="running") # queued / running / success / failed
     symbols: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
@@ -61,4 +67,3 @@ class BacktestResults(Base):
     trade_list: Mapped[list[dict] | None] = mapped_column(JSONB, nullable=True)
 
     run: Mapped["BacktestRuns"] = relationship(back_populates="results")
-    

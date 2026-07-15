@@ -8,6 +8,7 @@ if __package__ in (None, ""):
 
 from shared.redis_client import get_redis_client
 from shared.db.session import SessionLocal
+from app.models.user import User  # noqa: F401 - register FK target in SQLAlchemy metadata
 from app.models.strategy import BacktestRuns, Strategies, BacktestResults
 from workers.strategy_worker.backtest_runner import BacktestConfig, run_backtest
 
@@ -73,6 +74,8 @@ def process_one_backtest(run_id: int) -> None:
             end_date=run.end_date.strftime("%Y-%m-%d"),
             initial_capital=run.initial_capital,
             run_id=run.id,
+            commission=float(run.commission_rate),
+            slippage=float(run.slippage_rate),
         )
 
         result = run_backtest(config)

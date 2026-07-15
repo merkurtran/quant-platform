@@ -37,16 +37,35 @@ export function BacktestEmptyState() {
 
 interface BacktestFieldProps {
   label: string;
+  description?: string;
   value: string;
   onChange: (value: string) => void;
   type?: string;
+  min?: string;
+  step?: string;
 }
 
-export function BacktestField({ label, value, onChange, type = "text" }: BacktestFieldProps) {
+export function BacktestField({
+  label,
+  description,
+  value,
+  onChange,
+  type = "text",
+  min,
+  step,
+}: BacktestFieldProps) {
   return (
     <div className="space-y-1.5">
       <Label className="text-xs">{label}</Label>
-      <Input className="h-8 text-xs" type={type} value={value} onChange={(event) => onChange(event.target.value)} />
+      <Input
+        className="h-8 text-xs tabular-nums"
+        type={type}
+        min={min}
+        step={step}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {description && <p className="text-[10px] text-muted-foreground">{description}</p>}
     </div>
   );
 }

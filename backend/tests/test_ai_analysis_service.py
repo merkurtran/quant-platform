@@ -3,7 +3,7 @@ import json
 import pytest
 from pydantic import SecretStr
 
-from app.ai.analysis_service import AIAnalysisService
+from app.ai.analysis_service import AIAnalysisService, CACHE_TTL_SECONDS
 from app.ai.llm_client import LLMClient, PROVIDER_CONFIG
 from app.core.config import LLMSettings
 from app.schemas.ai import StockEventsRequest
@@ -12,12 +12,14 @@ from app.schemas.ai import StockEventsRequest
 class FakeRedis:
     def __init__(self):
         self.values: dict[str, str] = {}
+        self.expirations: list[int] = []
 
     async def get(self, key: str) -> str | None:
         return self.values.get(key)
 
     async def set(self, key: str, value: str, ex: int) -> None:
         self.values[key] = value
+        self.expirations.append(ex)
 
 
 class FakeLLM:
@@ -107,6 +109,18 @@ async def test_stock_events_use_cache_without_second_llm_call():
     assert second.cached is True
     assert second.events[0].title == "公司发布公告"
     assert llm.web_search_calls == 1
+    assert service._redis.expirations == [CACHE_TTL_SECONDS]
+
+
+def test_stock_cache_key_changes_on_next_shanghai_day(monkeypatch):
+    service = AIAnalysisService(llm=FakeLLM([]), redis=FakeRedis())
+    monkeypatch.setattr(service, "_cache_day", lambda: "2026-07-15")
+    first_day = service._cache_key("events", "600519.SH")
+    monkeypatch.setattr(service, "_cache_day", lambda: "2026-07-16")
+    next_day = service._cache_key("events", "600519.SH")
+
+    assert first_day != next_day
+    assert CACHE_TTL_SECONDS == 86400
 
 
 @pytest.mark.asyncio

@@ -14,15 +14,25 @@ import {
   LineStyle,
 } from "lightweight-charts";
 import { useThemeStore } from "@/stores/theme";
+import { useChartDrawings } from "@/hooks/use-chart-drawings";
+import { ChartDrawingToolbar } from "@/components/chart/chart-drawing-toolbar";
 import type { KlineItem } from "@/types";
 
 const UP_COLOR = "#ef4444"; // A 股红涨
 const DOWN_COLOR = "#22c55e"; // A 股绿跌
 
-export function KlineChart({ data }: KlineChartProps) {
+export function KlineChart({ data, symbol }: KlineChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const isDark = useThemeStore((state) => state.theme === "dark");
+  const {
+    activeTool,
+    hasSelection,
+    selectTool,
+    deleteSelected,
+    clearAll,
+    attach,
+  } = useChartDrawings(`chart-drawings:${symbol}`);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -92,6 +102,8 @@ export function KlineChart({ data }: KlineChartProps) {
       }))
     );
 
+    const detachDrawings = attach(chart, candleSeries, containerRef.current);
+
     chart.timeScale().fitContent();
 
     // 响应式
@@ -106,15 +118,28 @@ export function KlineChart({ data }: KlineChartProps) {
     ro.observe(containerRef.current);
 
     return () => {
+      detachDrawings();
       ro.disconnect();
       chart.remove();
       chartRef.current = null;
     };
-  }, [data, isDark]);
+  }, [attach, data, isDark]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="grid h-full w-full grid-cols-[40px_minmax(0,1fr)] gap-px bg-border/70">
+      <ChartDrawingToolbar
+        activeTool={activeTool}
+        hasSelection={hasSelection}
+        onSelectTool={selectTool}
+        onDeleteSelected={deleteSelected}
+        onClearAll={clearAll}
+      />
+      <div ref={containerRef} className="h-full min-w-0 bg-card" />
+    </div>
+  );
 }
 
 interface KlineChartProps {
   data: KlineItem[];
+  symbol: string;
 }

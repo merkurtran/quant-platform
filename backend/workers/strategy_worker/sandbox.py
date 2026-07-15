@@ -27,7 +27,7 @@ class SafeBuiltins:
         'StopIteration', 'RuntimeError', 'ZeroDivisionError',
         # 工具
         'repr', 'hash', 'dir', 'property',
-        'classmethod', 'staticmethod', 'object',
+        'classmethod', 'staticmethod', 'object', '__build_class__',
     }
     
     # 禁止访问的属性（防止绕过）
@@ -71,6 +71,23 @@ class SafeModuleProxy:
     
     def __dir__(self):
         return list(self._allowed_attrs)
+
+
+class SafeBacktraderProxy(SafeModuleProxy):
+    """Expose Backtrader's indicator namespace without widening the sandbox."""
+
+    def __init__(self, module, allowed_attrs: set, indicator_attrs: set):
+        super().__init__(module, allowed_attrs | {'indicators'}, 'bt')
+        self._safe_indicators = SafeModuleProxy(
+            module.indicators,
+            indicator_attrs,
+            'bt.indicators',
+        )
+
+    def __getattr__(self, name):
+        if name == 'indicators':
+            return self._safe_indicators
+        return super().__getattr__(name)
 
 
 def build_restricted_globals(base_strategy_class) -> Dict[str, Any]:
@@ -134,6 +151,15 @@ def build_restricted_globals(base_strategy_class) -> Dict[str, Any]:
     }
 
     # 2. 限制 backtrader 模块访问
+    BT_INDICATOR_ALLOWED = {
+        'CrossOver', 'PercentChange', 'LogReturn',
+        'SMA', 'SimpleMovingAverage',
+        'EMA', 'ExponentialMovingAverage',
+        'RSI', 'RelativeStrengthIndex',
+        'MACD', 'BBands', 'BollingerBands',
+        'ATR', 'AverageTrueRange',
+        'Stochastic', 'WilliamsR', 'TRIX', 'CCI',
+    }
     BT_ALLOWED = {
         # 核心类
         'Strategy', 'Indicator', 'Observer', 'Signal',
@@ -149,7 +175,7 @@ def build_restricted_globals(base_strategy_class) -> Dict[str, Any]:
         # 其他
         'date2num', 'num2date',
     }
-    safe_bt = SafeModuleProxy(bt, BT_ALLOWED, 'bt')
+    safe_bt = SafeBacktraderProxy(bt, BT_ALLOWED, BT_INDICATOR_ALLOWED)
     safe_pd = SafePandasProxy(pd, PD_ALLOWED, 'pd')
     # 3. 限制 numpy 模块访问
     NP_ALLOWED = {

@@ -13,6 +13,8 @@ from app.schemas.strategy import (
     BacktestRunPublic,
     BacktestRunResult,
     BacktestResultDetail,
+    BacktestRunSummary,
+    BacktestResultSummary,
 )
 from app.services.strategy_service import (
     create_strategy,
@@ -22,6 +24,7 @@ from app.services.strategy_service import (
     delete_strategy,
     trigger_backtest,
     get_backtest_run,
+    list_backtest_runs,
     StrategyNotFoundError,
 )
 from shared.db.session import get_db
@@ -122,12 +125,30 @@ def start_backtest(
             start_date=payload.start_date,
             end_date=payload.end_date,
             initial_capital=payload.initial_capital,
+            commission_rate=payload.commission_rate,
+            slippage_rate=payload.slippage_rate,
             symbols=payload.symbols,
             params=payload.params,
         )
     except StrategyNotFoundError:
         raise BizException(BizErrorCode.NOT_FOUND, "Strategy not found", status_code=404)
     return BacktestRunPublic(run_id=run.id, status=run.status)
+
+
+@backtest_router.get("", response_model=list[BacktestRunSummary])
+def list_runs(
+    strategy_id: int | None = None,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    runs = list_backtest_runs(
+        db,
+        user_id=current_user.id,
+        strategy_id=strategy_id,
+        limit=min(max(limit, 1), 100),
+    )
+    return [_backtest_summary(run) for run in runs]
 
 
 @backtest_router.get("/{run_id}", response_model=BacktestRunResult)
@@ -156,7 +177,45 @@ def get_run_result(
 
     return BacktestRunResult(
         run_id=run.id,
+        strategy_id=run.strategy_id,
         status=run.status,
+        start_date=run.start_date,
+        end_date=run.end_date,
+        initial_capital=run.initial_capital,
+        commission_rate=run.commission_rate,
+        slippage_rate=run.slippage_rate,
+        symbols=run.symbols,
+        params_snapshot=run.params_snapshot,
+        created_at=run.created_at,
+        finished_at=run.finished_at,
         result=result_detail,
+        error_message=run.error_message,
+    )
+
+
+def _backtest_summary(run) -> BacktestRunSummary:
+    result = None
+    if run.results:
+        row = run.results[0]
+        result = BacktestResultSummary(
+            total_return=float(row.total_return) if row.total_return is not None else None,
+            max_drawdown=float(row.max_drawdown) if row.max_drawdown is not None else None,
+            sharpe_ratio=float(row.sharpe_ratio) if row.sharpe_ratio is not None else None,
+            trade_count=row.trade_count,
+        )
+    return BacktestRunSummary(
+        run_id=run.id,
+        strategy_id=run.strategy_id,
+        status=run.status,
+        start_date=run.start_date,
+        end_date=run.end_date,
+        initial_capital=run.initial_capital,
+        commission_rate=run.commission_rate,
+        slippage_rate=run.slippage_rate,
+        symbols=run.symbols,
+        params_snapshot=run.params_snapshot,
+        created_at=run.created_at,
+        finished_at=run.finished_at,
+        result=result,
         error_message=run.error_message,
     )

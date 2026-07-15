@@ -130,8 +130,38 @@ export interface BacktestResultDetail {
 
 export interface BacktestRunResult {
   run_id: number;
+  strategy_id: number;
   status: string;
+  start_date: string;
+  end_date: string;
+  initial_capital: string;
+  commission_rate: string;
+  slippage_rate: string;
+  symbols: string[];
+  params_snapshot: Record<string, unknown>;
+  created_at: string;
+  finished_at: string | null;
   result: BacktestResultDetail | null;
+  error_message: string | null;
+}
+
+export interface BacktestRunSummary {
+  run_id: number;
+  strategy_id: number;
+  status: string;
+  start_date: string;
+  end_date: string;
+  initial_capital: string;
+  commission_rate: string;
+  slippage_rate: string;
+  symbols: string[];
+  params_snapshot: Record<string, unknown>;
+  created_at: string;
+  finished_at: string | null;
+  result: Pick<
+    BacktestResultDetail,
+    "total_return" | "max_drawdown" | "sharpe_ratio" | "trade_count"
+  > | null;
   error_message: string | null;
 }
 

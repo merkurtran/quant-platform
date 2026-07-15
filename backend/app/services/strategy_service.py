@@ -96,6 +96,8 @@ def trigger_backtest(
     start_date: date,
     end_date: date,
     initial_capital: Decimal,
+    commission_rate: Decimal,
+    slippage_rate: Decimal,
     symbols: list[str],
     params: dict,
 ) -> BacktestRuns:
@@ -107,6 +109,8 @@ def trigger_backtest(
         start_date=start_date,
         end_date=end_date,
         initial_capital=initial_capital,
+        commission_rate=commission_rate,
+        slippage_rate=slippage_rate,
         symbols=symbols,
         params_snapshot=params,
         status="queued",
@@ -137,3 +141,20 @@ def get_backtest_run(db: Session, run_id: int, user_id: int) -> BacktestRuns:
     if run is None:
         raise StrategyNotFoundError(f"Backtest run {run_id} not found for user {user_id}")
     return run
+
+
+def list_backtest_runs(
+    db: Session,
+    user_id: int,
+    strategy_id: int | None = None,
+    limit: int = 20,
+) -> list[BacktestRuns]:
+    query = (
+        db.query(BacktestRuns)
+        .options(joinedload(BacktestRuns.results))
+        .join(Strategies, BacktestRuns.strategy_id == Strategies.id)
+        .filter(Strategies.user_id == user_id)
+    )
+    if strategy_id is not None:
+        query = query.filter(BacktestRuns.strategy_id == strategy_id)
+    return query.order_by(BacktestRuns.created_at.desc()).limit(limit).all()

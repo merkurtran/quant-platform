@@ -155,6 +155,7 @@ export default function MarketPage() {
     setSelectedSymbol(sym);
     const params = new URLSearchParams(searchParams);
     params.set("symbol", sym);
+    params.delete("runId");
     router.replace(`/market?${params.toString()}`);
   };
 
@@ -306,7 +307,7 @@ export default function MarketPage() {
               {klineLoading ? (
                 <div className="h-full animate-pulse bg-muted/30" />
               ) : klineData && klineData.items.length > 0 ? (
-                <KlineChart data={klineData.items} />
+                <KlineChart data={klineData.items} symbol={symbol} />
               ) : (
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                   暂无 K 线数据（可手动执行{" "}

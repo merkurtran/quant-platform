@@ -11,15 +11,23 @@ interface StartBacktestInput {
   startDate: string;
   endDate: string;
   initialCapital: string;
+  commissionRate: string;
+  slippageRate: string;
   symbols: string[];
   params?: Record<string, unknown>;
 }
 
-export function useBacktestRun() {
+export function useBacktestRun(initialRunId?: number | null) {
   const queryClient = useQueryClient();
-  const [runId, setRunId] = useState<number | null>(null);
+  const routeRunId = initialRunId ?? null;
+  const [runSelection, setRunSelection] = useState({
+    routeRunId,
+    runId: routeRunId,
+  });
+  const runId =
+    runSelection.routeRunId === routeRunId ? runSelection.runId : routeRunId;
   const [isStarting, setIsStarting] = useState(false);
-  const notifiedRunId = useRef<number | null>(null);
+  const startedRunId = useRef<number | null>(null);
 
   const { data: result } = useQuery({
     queryKey: ["backtest-run", runId],
@@ -32,30 +40,34 @@ export function useBacktestRun() {
   });
 
   useEffect(() => {
-    if (!result || notifiedRunId.current === result.run_id) return;
+    if (!result || startedRunId.current !== result.run_id) return;
     if (result.status === "success") {
-      notifiedRunId.current = result.run_id;
+      startedRunId.current = null;
       queryClient.invalidateQueries({ queryKey: ["strategies"] });
+      queryClient.invalidateQueries({ queryKey: ["backtest-runs"] });
       toast.success("回测完成");
     } else if (result.status === "failed") {
-      notifiedRunId.current = result.run_id;
+      startedRunId.current = null;
       toast.error(`回测失败：${result.error_message ?? "未知错误"}`);
     }
   }, [queryClient, result]);
 
   const start = async (input: StartBacktestInput) => {
     setIsStarting(true);
-    setRunId(null);
-    notifiedRunId.current = null;
+    setRunSelection({ routeRunId, runId: null });
+    startedRunId.current = null;
     try {
       const run = await strategyService.startBacktest(input.strategyId, {
         start_date: input.startDate,
         end_date: input.endDate,
         initial_capital: input.initialCapital,
+        commission_rate: input.commissionRate,
+        slippage_rate: input.slippageRate,
         symbols: input.symbols,
         params: input.params,
       });
-      setRunId(run.run_id);
+      startedRunId.current = run.run_id;
+      setRunSelection({ routeRunId, runId: run.run_id });
       toast.success("回测已进入队列");
       return run.run_id;
     } catch {

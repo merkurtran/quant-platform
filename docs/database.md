@@ -165,6 +165,8 @@
 | start_date | Date | NOT NULL | — |
 | end_date | Date | NOT NULL | — |
 | initial_capital | Numeric(18,2) | NOT NULL | 初始资金 |
+| commission_rate | Numeric(10,6) | NOT NULL, default `0.001` | 手续费率快照 |
+| slippage_rate | Numeric(10,6) | NOT NULL, default `0.0005` | 滑点率快照 |
 | params_snapshot | JSONB | NOT NULL | 参数快照 |
 | status | String(16) | NOT NULL, default `running` | `queued/running/success/failed` |
 | symbols | JSONB | NOT NULL | 标的列表 |

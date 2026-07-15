@@ -4,6 +4,7 @@ import type {
   StrategyDetail,
   BacktestRun,
   BacktestRunResult,
+  BacktestRunSummary,
 } from "@/types";
 
 export const strategyService = {
@@ -37,6 +38,8 @@ export const strategyService = {
       start_date: string;
       end_date: string;
       initial_capital: string;
+      commission_rate: string;
+      slippage_rate: string;
       symbols: string[];
       params?: Record<string, unknown>;
     }
@@ -48,5 +51,12 @@ export const strategyService = {
   getBacktestRun: (runId: number) =>
     api
       .get<BacktestRunResult>(`/backtest_runs/${runId}`)
+      .then((r) => r.data),
+
+  listBacktestRuns: (strategyId: number, limit = 20) =>
+    api
+      .get<BacktestRunSummary[]>("/backtest_runs", {
+        params: { strategy_id: strategyId, limit },
+      })
       .then((r) => r.data),
 };

@@ -40,6 +40,8 @@ class BacktestRequest(BaseModel):
     start_date: date
     end_date: date
     initial_capital: Decimal = Field(gt=0)
+    commission_rate: Decimal = Field(default=Decimal("0.001"), ge=0, le=Decimal("0.1"))
+    slippage_rate: Decimal = Field(default=Decimal("0.0005"), ge=0, le=Decimal("0.1"))
     symbols: list[str] = Field(min_length=1)
     params: dict = Field(default_factory=dict)
 
@@ -62,10 +64,44 @@ class BacktestResultDetail(BaseModel):
     equity_curve: list | None
 
 
+class BacktestResultSummary(BaseModel):
+    total_return: float | None
+    max_drawdown: float | None
+    sharpe_ratio: float | None
+    trade_count: int | None
+
+
+class BacktestRunSummary(BaseModel):
+    run_id: int
+    strategy_id: int
+    status: str
+    start_date: date
+    end_date: date
+    initial_capital: Decimal
+    commission_rate: Decimal
+    slippage_rate: Decimal
+    symbols: list[str]
+    params_snapshot: dict
+    created_at: datetime
+    finished_at: datetime | None
+    result: BacktestResultSummary | None = None
+    error_message: str | None = None
+
+
 class BacktestRunResult(BaseModel):
     """GET /backtest_runs/{run_id} 响应"""
     run_id: int
+    strategy_id: int
     status: str
+    start_date: date
+    end_date: date
+    initial_capital: Decimal
+    commission_rate: Decimal
+    slippage_rate: Decimal
+    symbols: list[str]
+    params_snapshot: dict
+    created_at: datetime
+    finished_at: datetime | None
     result: BacktestResultDetail | None = None
     error_message: str | None = None
 

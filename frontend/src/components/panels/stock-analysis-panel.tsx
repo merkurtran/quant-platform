@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { ArrowLeft, Loader2, RefreshCw, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, Loader2, Newspaper, RefreshCw, Sparkles } from "lucide-react";
 import { aiService } from "@/services/ai";
 import { Button } from "@/components/ui/button";
 import { StockAnalysisContent } from "@/components/panels/stock-analysis-content";
@@ -15,37 +15,45 @@ interface StockAnalysisPanelProps {
 }
 
 export function StockAnalysisPanel({ symbol, stockName }: StockAnalysisPanelProps) {
-  const [analysis, setAnalysis] = useState<StockAnalysis | null>(null);
+  const [selectedAnalysis, setSelectedAnalysis] = useState<{
+    symbol: string;
+    value: StockAnalysis;
+  } | null>(null);
 
   const eventsQuery = useQuery({
     queryKey: ["ai-stock-events", symbol],
     queryFn: () => aiService.getStockEvents(symbol!, stockName),
     enabled: Boolean(symbol),
-    staleTime: 15 * 60 * 1000,
-    gcTime: 30 * 60 * 1000,
+    staleTime: millisecondsUntilTomorrow(),
+    gcTime: 25 * 60 * 60 * 1000,
     retry: false,
   });
 
   const analysisMutation = useMutation({
     mutationFn: (event: StockNewsEvent) =>
       aiService.analyzeStockEvent(symbol!, stockName, event),
-    onSuccess: setAnalysis,
+    onSuccess: (value) => setSelectedAnalysis({ symbol: symbol!, value }),
   });
 
-  const activeAnalysis = analysis ?? eventsQuery.data?.auto_analysis ?? null;
+  const activeAnalysis =
+    selectedAnalysis?.symbol === symbol
+      ? selectedAnalysis.value
+      : eventsQuery.data?.auto_analysis ?? null;
+  const isEventDetail = selectedAnalysis?.symbol === symbol;
 
   return (
     <section className="flex min-h-0 flex-1 flex-col border-t">
       <div className="flex h-10 shrink-0 items-center gap-2 px-3">
-        {activeAnalysis && eventsQuery.data?.events.length ? (
+        {isEventDetail ? (
           <Button
             variant="ghost"
-            size="icon"
-            className="h-6 w-6"
-            onClick={() => setAnalysis(null)}
+            size="sm"
+            className="h-7 gap-1 px-1.5 text-xs"
+            onClick={() => setSelectedAnalysis(null)}
             title="返回事件列表"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
+            事件列表
           </Button>
         ) : (
           <Sparkles className="h-3.5 w-3.5 text-primary" />
@@ -95,21 +103,25 @@ export function StockAnalysisPanel({ symbol, stockName }: StockAnalysisPanelProp
         ) : activeAnalysis ? (
           <StockAnalysisContent analysis={activeAnalysis} />
         ) : eventsQuery.data?.events.length ? (
-          <div className="divide-y">
+          <div>
             {eventsQuery.data.events.map((event) => (
               <button
                 key={event.event_id}
-                className="w-full px-3 py-2.5 text-left transition-colors hover:bg-muted/50"
+                className="group grid w-full grid-cols-[20px_minmax(0,1fr)_16px] gap-2 border-b px-3 py-3 text-left transition-colors hover:bg-muted/50"
                 onClick={() => analysisMutation.mutate(event)}
               >
-                <span className="line-clamp-2 text-xs font-medium leading-4">{event.title}</span>
-                <span className="mt-1 block line-clamp-2 text-[11px] leading-4 text-muted-foreground">
-                  {event.summary}
+                <span className="flex h-5 w-5 items-center justify-center rounded bg-primary/10 text-primary">
+                  <Newspaper className="h-3 w-3" />
                 </span>
-                <span className="mt-1 block text-[10px] text-muted-foreground">
-                  {event.source_name}
-                  {event.published_at ? ` · ${dayjs(event.published_at).format("MM-DD HH:mm")}` : ""}
+                <span className="min-w-0">
+                  <span className="line-clamp-2 text-xs font-semibold leading-4">{event.title}</span>
+                  <span className="mt-1 block line-clamp-2 text-[11px] leading-4 text-muted-foreground">{event.summary}</span>
+                  <span className="mt-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                    <span className="rounded bg-muted px-1.5 py-0.5">{event.source_name}</span>
+                    {event.published_at && <span>{dayjs(event.published_at).format("MM-DD HH:mm")}</span>}
+                  </span>
                 </span>
+                <ArrowUpRight className="mt-0.5 h-3.5 w-3.5 text-muted-foreground transition-colors group-hover:text-primary" />
               </button>
             ))}
           </div>
@@ -119,6 +131,11 @@ export function StockAnalysisPanel({ symbol, stockName }: StockAnalysisPanelProp
       </div>
     </section>
   );
+}
+
+function millisecondsUntilTomorrow() {
+  const now = dayjs();
+  return Math.max(now.endOf("day").diff(now) + 1, 1000);
 }
 
 function EmptyState({ text }: { text: string }) {

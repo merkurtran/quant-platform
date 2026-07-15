@@ -7,7 +7,6 @@ import {
   CrosshairMode,
   createChart,
   type AreaData,
-  type IChartApi,
   type Time,
 } from "lightweight-charts";
 import { useThemeStore } from "@/stores/theme";
@@ -23,7 +22,6 @@ interface EquityCurveChartProps {
 
 export function EquityCurveChart({ data }: EquityCurveChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const chartRef = useRef<IChartApi | null>(null);
   const isDark = useThemeStore((state) => state.theme === "dark");
 
   useEffect(() => {
@@ -46,11 +44,8 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
       crosshair: { mode: CrosshairMode.Normal },
       rightPriceScale: { borderColor },
       timeScale: { borderColor, timeVisible: false },
-      width: containerRef.current.clientWidth,
-      height: containerRef.current.clientHeight,
+      autoSize: true,
     });
-    chartRef.current = chart;
-
     const series = chart.addSeries(AreaSeries, {
       lineColor: "#089981",
       topColor: "rgba(8, 153, 129, 0.28)",
@@ -64,21 +59,10 @@ export function EquityCurveChart({ data }: EquityCurveChartProps) {
     series.setData(points);
     chart.timeScale().fitContent();
 
-    const observer = new ResizeObserver(() => {
-      if (!containerRef.current || !chartRef.current) return;
-      chartRef.current.applyOptions({
-        width: containerRef.current.clientWidth,
-        height: containerRef.current.clientHeight,
-      });
-    });
-    observer.observe(containerRef.current);
-
     return () => {
-      observer.disconnect();
       chart.remove();
-      chartRef.current = null;
     };
   }, [data, isDark]);
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return <div ref={containerRef} className="h-full min-h-64 w-full" />;
 }

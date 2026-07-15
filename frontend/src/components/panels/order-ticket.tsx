@@ -62,14 +62,16 @@ export function OrderTicket({ accounts, symbol }: OrderTicketProps) {
         {(["buy", "sell"] as const).map((value) => (
           <button
             key={value}
+            type="button"
+            aria-pressed={side === value}
             onClick={() => setSide(value)}
             className={cn(
-              "h-8 rounded text-xs font-medium transition-colors",
+              "h-8 rounded text-xs font-semibold transition-colors",
               side === value
                 ? value === "buy"
-                  ? "bg-card text-up shadow-sm"
-                  : "bg-card text-down shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                  ? "bg-up text-white shadow-sm"
+                  : "bg-down text-white shadow-sm"
+                : "text-muted-foreground hover:bg-card hover:text-foreground"
             )}
           >
             {value === "buy" ? "买入" : "卖出"}
@@ -119,13 +121,16 @@ export function OrderTicket({ accounts, symbol }: OrderTicketProps) {
       )}
 
       <Button
-        className={cn("w-full", side === "sell" && "bg-down hover:bg-down/90")}
+        className={cn(
+          "w-full font-semibold text-white",
+          side === "buy" ? "bg-up hover:bg-up/90" : "bg-down hover:bg-down/90"
+        )}
         size="sm"
         onClick={() => createMutation.mutate()}
         disabled={!canSubmit || createMutation.isPending}
       >
         {createMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-        {side === "buy" ? "确认买入" : "确认卖出"}
+        {side === "buy" ? "买入" : "卖出"}
       </Button>
     </div>
   );

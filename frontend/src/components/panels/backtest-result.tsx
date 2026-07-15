@@ -32,8 +32,8 @@ export function BacktestResult({ backtest }: BacktestResultProps) {
   ];
 
   return (
-    <div className="h-full overflow-y-auto bg-background p-5">
-      <div className="mx-auto flex max-w-6xl flex-col gap-5">
+    <div className="h-full overflow-y-auto bg-background p-4 lg:p-5">
+      <div className="flex h-full min-h-[720px] w-full flex-col gap-4">
         <header className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-2">
@@ -42,6 +42,9 @@ export function BacktestResult({ backtest }: BacktestResultProps) {
             </div>
             <p className="mt-1 text-xs text-muted-foreground">
               {backtest.strategyName} · {backtest.symbol} · {backtest.startDate} 至 {backtest.endDate} · 初始资金 ¥{formatMoney(backtest.initialCapital)}
+            </p>
+            <p className="mt-1 text-[11px] tabular-nums text-muted-foreground">
+              手续费率 {formatRate(backtest.run.commission_rate)} · 滑点率 {formatRate(backtest.run.slippage_rate)}
             </p>
           </div>
           <span className="inline-flex h-6 items-center gap-1.5 rounded bg-success/10 px-2 text-xs font-medium text-success">
@@ -56,12 +59,12 @@ export function BacktestResult({ backtest }: BacktestResultProps) {
           ))}
         </div>
 
-        <section className="overflow-hidden rounded-md border bg-card">
+        <section className="flex min-h-80 flex-1 flex-col overflow-hidden rounded-md border bg-card">
           <div className="flex h-11 items-center justify-between border-b px-4">
             <h3 className="text-sm font-semibold">权益曲线</h3>
             <span className="text-xs text-muted-foreground">组合净值变化</span>
           </div>
-          <div className="h-72">
+          <div className="min-h-0 flex-1">
             {result.equity_curve?.length ? (
               <EquityCurveChart data={result.equity_curve} />
             ) : (
@@ -78,6 +81,10 @@ export function BacktestResult({ backtest }: BacktestResultProps) {
 
 function formatReturn(value: number | null) {
   return formatPercent(value == null ? null : value * 100);
+}
+
+function formatRate(value: string) {
+  return `${(Number(value) * 100).toFixed(3)}%`;
 }
 
 interface MetricProps {

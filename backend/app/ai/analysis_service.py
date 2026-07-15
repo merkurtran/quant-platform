@@ -4,6 +4,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from app.ai.llm_client import LLMClient
 from app.ai.prompts.strategy_gen import STRATEGY_GEN_SYSTEM
@@ -20,7 +21,8 @@ from shared.redis_client import get_async_redis_client
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL_SECONDS = 15 * 60
+CACHE_TTL_SECONDS = 24 * 60 * 60
+CACHE_TIMEZONE = ZoneInfo("Asia/Shanghai")
 PROMPT_VERSION = "v1"
 DISCLAIMER = "本分析基于公开网络信息生成，仅供研究参考，不构成任何投资建议。"
 
@@ -171,9 +173,16 @@ class AIAnalysisService:
         return StockAnalysisResponse.model_validate(payload)
 
     def _cache_key(self, kind: str, symbol: str, suffix: str = "") -> str:
-        identity = f"{PROMPT_VERSION}|{self._llm.provider}|{self._llm.model}|{symbol}|{suffix}"
+        identity = (
+            f"{PROMPT_VERSION}|{self._llm.provider}|{self._llm.model}|"
+            f"{self._cache_day()}|{symbol}|{suffix}"
+        )
         digest = hashlib.sha256(identity.encode("utf-8")).hexdigest()
         return f"ai:stock:{kind}:{digest}"
+
+    @staticmethod
+    def _cache_day() -> str:
+        return datetime.now(CACHE_TIMEZONE).date().isoformat()
 
     async def _cache_get(self, key: str, model: type[Any]) -> Any | None:
         try:

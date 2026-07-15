@@ -117,7 +117,7 @@ class BacktestConfig:
     initial_capital: Decimal        # 初始资金
     run_id: int                     # 回测记录ID
     commission: float = 0.001       # 手续费率（千分之一）
-    slippage: float = 0.01          # 滑点
+    slippage: float = 0.0005        # 滑点率（万分之五）
     
     # 安全参数白名单
     ALLOWED_PARAM_TYPES = (str, int, float, bool, type(None))
@@ -161,6 +161,7 @@ class BacktestConfig:
             'initial_capital': str(self.initial_capital),
             'run_id': self.run_id,
             'commission': self.commission,
+            'slippage': self.slippage,
             'strategy_params': self.strategy_params,
         }
 
@@ -267,10 +268,9 @@ def _extract_strategy_class(restricted_globals: dict, base_class: type) -> type:
             # 不是类
             continue
         
-        # 检查继承深度（防止多层继承链滥用）
-        # BaseStrategy → 用户策略（2层是正常的）
-        if len(obj.__mro__) > 3:
-            logger.warning(f"策略类 {name} 继承层级过深: {len(obj.__mro__)} 层")
+        # 用户策略必须直接继承平台基类，避免通过多层继承绕过约束。
+        if base_class not in obj.__bases__:
+            logger.warning(f"策略类 {name} 必须直接继承 BaseStrategy")
             continue
         
         strategy_classes.append((name, obj))
@@ -388,45 +388,29 @@ def _calculate_metrics(trade_analysis: dict) -> dict:
     }
 
 
+class _EquityCurveAnalyzer(bt.Analyzer):
+    """Record portfolio value at the end of each processed bar."""
+
+    def start(self):
+        self.values = []
+        self.dates = []
+
+    def next(self):
+        self.values.append(float(self.strategy.broker.getvalue()))
+        self.dates.append(self.strategy.data.datetime.date(0).isoformat())
+
+    def get_analysis(self):
+        return {'values': self.values, 'dates': self.dates}
+
+
 def _extract_equity_curve(strategy) -> tuple[List[float], List[str]]:
-    """
-    提取资金曲线
-    
-    Returns:
-        (values, dates): 资金曲线值列表和对应的日期列表
-    """
-    values = []
-    dates = []
-    
+    """Extract the bar-by-bar portfolio value recorded during the run."""
     try:
-        # 方法1：从 cerebro 的观察者中获取
-        if hasattr(strategy, 'broker') and hasattr(strategy, 'data'):
-            # 遍历每个交易日
-            for i in range(len(strategy.data)):
-                try:
-                    value = strategy.broker.getvalue()
-                    values.append(float(value))
-                    # 获取当前日期
-                    dt = strategy.data.datetime.date(i)
-                    dates.append(dt.strftime('%Y-%m-%d') if hasattr(dt, 'strftime') else str(dt))
-                except Exception:
-                    pass
-        
-        # 如果数据为空，尝试其他方法
-        if not values and hasattr(strategy, 'analyzers'):
-            # 从分析器中获取
-            for analyzer in strategy.analyzers:
-                if hasattr(analyzer, 'get_analysis'):
-                    analysis = analyzer.get_analysis()
-                    if 'equity' in analysis:
-                        values = analysis.get('equity', [])
-                        dates = analysis.get('dates', [])
-                        break
-    
+        analysis = strategy.analyzers.equity_curve.get_analysis()
+        return analysis.get('values', []), analysis.get('dates', [])
     except Exception as e:
         logger.warning(f"提取资金曲线失败: {e}")
-    
-    return values, dates
+        return [], []
 
 
 def _extract_trades(strategy) -> List[dict]:
@@ -601,9 +585,7 @@ def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
             cerebro.addanalyzer(bt.analyzers.DrawDown, _name='drawdown')
             cerebro.addanalyzer(bt.analyzers.SharpeRatio, _name='sharpe')
             cerebro.addanalyzer(bt.analyzers.TradeAnalyzer, _name='trades')
-            
-            # 添加观察者（用于记录资金曲线）
-            cerebro.addobserver(bt.observers.Value, _name='value')
+            cerebro.addanalyzer(_EquityCurveAnalyzer, _name='equity_curve')
             
             # 运行回测
             results = cerebro.run()

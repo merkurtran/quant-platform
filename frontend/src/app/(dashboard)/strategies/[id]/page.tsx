@@ -11,12 +11,13 @@ import { StrategySettingsPanel } from "@/components/strategy/strategy-settings-p
 import {
   fieldsToParams,
   paramsToFields,
+  syncParameterFieldsFromCode,
   type StrategyParameterField,
 } from "@/lib/strategy-parameters";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { STRATEGY_STATUS_LABELS } from "@/constants";
-import type { StrategyDraft } from "@/types";
+import type { BacktestRunSummary, StrategyDraft } from "@/types";
 import { toast } from "sonner";
 
 export default function StrategyDetailPage() {
@@ -35,6 +36,11 @@ export default function StrategyDetailPage() {
     queryFn: () => strategyService.get(strategyId),
     enabled: !isNew,
   });
+  const historyQuery = useQuery({
+    queryKey: ["backtest-runs", strategyId],
+    queryFn: () => strategyService.listBacktestRuns(strategyId),
+    enabled: !isNew,
+  });
 
   const initRef = useRef<number | null>(null);
   useEffect(() => {
@@ -44,7 +50,7 @@ export default function StrategyDetailPage() {
       setName(strategy.name);
       setDescription(strategy.description ?? "");
       setCode(strategy.code);
-      setParameterFields(paramsToFields(strategy.params));
+      setParameterFields(paramsToFields(strategy.params, strategy.code));
     }
   }, [strategyQuery.data]);
 
@@ -83,8 +89,23 @@ export default function StrategyDetailPage() {
     setName(draft.name);
     setDescription(draft.description);
     setCode(draft.code);
-    setParameterFields(paramsToFields(draft.params));
+    setParameterFields(paramsToFields(draft.params, draft.code));
     toast.success("AI 草稿已应用，请检查后保存");
+  };
+
+  const updateCode = (value: string) => {
+    setCode(value);
+    setParameterFields((fields) => syncParameterFieldsFromCode(value, fields));
+  };
+
+  const openBacktestHistory = (run: BacktestRunSummary) => {
+    const query = new URLSearchParams({
+      panel: "backtest",
+      strategyId: String(strategyId),
+      runId: String(run.run_id),
+    });
+    if (run.symbols[0]) query.set("symbol", run.symbols[0]);
+    router.push(`/market?${query.toString()}`);
   };
 
   if (!isNew && strategyQuery.isLoading) {
@@ -158,14 +179,17 @@ export default function StrategyDetailPage() {
           disabled={isArchived}
           onNameChange={setName}
           onDescriptionChange={setDescription}
-          onCodeChange={setCode}
+          onCodeChange={updateCode}
         />
         <StrategySettingsPanel
           currentName={name}
           parameterFields={parameterFields}
+          history={isNew ? undefined : (historyQuery.data ?? [])}
+          historyLoading={historyQuery.isLoading}
           disabled={isArchived}
           onParametersChange={setParameterFields}
           onApplyDraft={applyDraft}
+          onHistorySelect={openBacktestHistory}
         />
       </main>
     </div>

@@ -267,7 +267,8 @@ condition 按 `rule_type` 区分（discriminated union）：
 
 ```json
 { "start_date": "2025-01-01", "end_date": "2026-06-30",
-  "initial_capital": "1000000.00", "symbols": ["600519.SH"], "params": {} }
+  "initial_capital": "1000000.00", "commission_rate": "0.001",
+  "slippage_rate": "0.0005", "symbols": ["600519.SH"], "params": {} }
 ```
 
 **响应 data：** `{ "run_id": 7, "status": "running" }`（错误 `20001` 策略不存在 404）
@@ -278,6 +279,10 @@ condition 按 `rule_type` 区分（discriminated union）：
 
 > 前缀 `/api/v1/backtest_runs`，全部 🔐 需认证。
 
+### GET /backtest_runs
+
+查询当前用户的历史回测，支持 `strategy_id` 和 `limit`（默认 20，最大 100）。按创建时间倒序返回运行参数、手续费率、滑点率、状态及关键指标摘要。
+
 ### GET /backtest_runs/{run_id}
 
 前端需轮询直到 `status` 为 `success` / `failed`。
@@ -287,7 +292,13 @@ condition 按 `rule_type` 区分（discriminated union）：
 ```json
 {
   "run_id": 7,
+  "strategy_id": 3,
   "status": "success",
+  "start_date": "2025-01-01", "end_date": "2026-06-30",
+  "initial_capital": "1000000.00", "commission_rate": "0.001000",
+  "slippage_rate": "0.000500", "symbols": ["600519.SH"],
+  "params_snapshot": {"fast_period": 5, "slow_period": 20},
+  "created_at": "2026-07-15T10:00:00+08:00", "finished_at": "2026-07-15T10:00:03+08:00",
   "result": {
     "total_return": 15.32, "annual_return": 12.50,
     "max_drawdown": -8.50, "sharpe_ratio": 1.2345,
@@ -410,7 +421,7 @@ role 值：`user` / `assistant` / `tool`。content 结构因 role 不同（详�
 
 ### POST /ai/stock-events
 
-使用当前 `.env` 中配置的 Claude 模型联网搜索最近 7 日公开信息。结果按模型、股票和提示词版本缓存 15 分钟；缓存只存 Redis，不写入业务数据库。
+使用当前 `.env` 中配置的模型联网搜索最近 7 日公开信息。结果按模型、股票、提示词版本和上海自然日缓存；同一天重复进入返回 Redis 中的原结果，不重复消耗 Token，次日自动重新搜索。
 
 **请求体：**
 
@@ -424,7 +435,7 @@ role 值：`user` / `assistant` / `tool`。content 结构因 role 不同（详�
 
 ### POST /ai/stock-analysis
 
-针对用户从 `stock-events` 选中的事件联网核验并生成结构化事件分析。同一股票和事件缓存 15 分钟。
+针对用户从 `stock-events` 选中的事件联网核验并生成结构化事件分析。同一自然日内，相同股票和事件返回缓存结果。
 
 **请求体：** `{ symbol, stock_name?, event }`
 **响应 data：** `{ meta, sections, disclaimer, sources, cached }`

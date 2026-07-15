@@ -85,7 +85,12 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
             <div key={order.id} className="group grid grid-cols-[minmax(0,1fr)_70px_62px_28px] items-center gap-2 border-b border-border/60 px-1 py-2 text-xs">
               <div className="min-w-0">
                 <p className="truncate font-medium tabular-nums">{order.symbol}</p>
-                <p className={order.side === "buy" ? "text-up" : "text-down"}>{order.side === "buy" ? "买入" : "卖出"} · {order.order_type === "limit" ? "限价" : "市价"}</p>
+                <p className="mt-1 flex items-center gap-1.5">
+                  <span className={order.side === "buy" ? "rounded bg-up/10 px-1.5 py-0.5 text-[10px] font-medium text-up" : "rounded bg-down/10 px-1.5 py-0.5 text-[10px] font-medium text-down"}>
+                    {order.side === "buy" ? "买入" : "卖出"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">{order.order_type === "limit" ? "限价" : "市价"}</span>
+                </p>
               </div>
               <div className="text-right tabular-nums">
                 <p>{order.price ? formatPrice(order.price) : "市价"}</p>
