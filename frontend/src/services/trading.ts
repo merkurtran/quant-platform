@@ -6,7 +6,11 @@ export const tradingService = {
   listAccounts: () =>
     api.get<BrokerAccount[]>("/broker_accounts").then((r) => r.data),
 
-  createAccount: (data: { broker_type?: string; account_alias: string }) =>
+  createAccount: (data: {
+    broker_type?: string;
+    account_alias: string;
+    initial_cash: string;
+  }) =>
     api.post<BrokerAccount>("/broker_accounts", data).then((r) => r.data),
 
   deleteAccount: (accountId: number) =>

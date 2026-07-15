@@ -47,6 +47,7 @@ export function OrderTicket({ accounts, symbol }: OrderTicketProps) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["broker-accounts"] });
       setPrice("");
       setVolume("");
       toast.success("下单成功");

@@ -27,6 +27,8 @@ async def create_broker_account(
         user_id=user.id,
         broker_type=body.broker_type,
         account_alias=body.account_alias,
+        initial_cash=body.initial_cash,
+        cash_balance=body.initial_cash,
         status="active",
     )
     db.add(account)

@@ -73,7 +73,15 @@ def create_default_provider() -> MarketDataProvider:
     except Exception as e:
         logger.warning(f"MootdxProvider init failed: {e}")
 
-    # 3. akshare（备选）
+    # 3. CNINFO corporate actions (prices continue through the earlier providers)
+    try:
+        from shared.market_data.cninfo_provider import CninfoProvider
+        providers.append(CninfoProvider())
+        logger.info("CninfoProvider initialized")
+    except Exception as e:
+        logger.warning(f"CninfoProvider init failed: {e}")
+
+    # 4. akshare（末级备选）
     try:
         from shared.market_data.akshare_provider import AKShareProvider
         providers.append(AKShareProvider())

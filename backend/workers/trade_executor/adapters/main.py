@@ -7,6 +7,8 @@ if __package__ in (None, ""):
 
 from shared.db.session import AsyncSessionLocal
 from shared.redis_client import get_async_redis_client
+import app.models.strategy  # noqa: F401 - register FK targets for worker sessions
+import app.models.user  # noqa: F401 - register FK targets for worker sessions
 from workers.trade_executor.adapters.consumer import run_consumer
 from workers.trade_executor.adapters.outbox_processor import run_outbox_processor
 from workers.trade_executor.adapters.risk_control import RiskControl

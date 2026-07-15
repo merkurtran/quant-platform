@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from workers.trade_executor.adapters.base import OrderRequest
+from workers.trade_executor.adapters.base import OrderRequest, OrderResult
 from workers.trade_executor.adapters.registry import get_adapter
 
 logger = logging.getLogger(__name__)
@@ -103,7 +103,7 @@ async def _dispatch_one(
 
         acct_stmt = select(BrokerAccount).where(
             BrokerAccount.id == order.broker_account_id
-        )
+        ).with_for_update()
         acct_result = await session.execute(acct_stmt)
         account = acct_result.scalar_one_or_none()
 
@@ -126,15 +126,77 @@ async def _dispatch_one(
             adapter.connect({})
 
             req_json = outbox.request_json
+            execution_price = (
+                Decimal(str(req_json["price"])) if req_json.get("price") else None
+            )
+            if execution_price is None:
+                from app.models.market import Klines
+
+                price_result = await session.execute(
+                    select(Klines.close)
+                    .where(Klines.symbol == order.symbol)
+                    .order_by(Klines.ts.desc())
+                    .limit(1)
+                )
+                market_price = price_result.scalar_one_or_none()
+                if market_price is not None:
+                    slippage = account.slippage_rate or Decimal("0")
+                    direction = Decimal("1") if order.side == "buy" else Decimal("-1")
+                    execution_price = market_price * (Decimal("1") + direction * slippage)
+
             request = OrderRequest(
                 symbol=req_json["symbol"],
                 side=req_json["side"],
                 order_type=req_json["order_type"],
-                price=Decimal(str(req_json["price"])) if req_json.get("price") else None,
+                price=execution_price,
                 volume=Decimal(str(req_json["volume"])),
             )
 
-            broker_result = adapter.place_order(request)
+            pos_stmt = select(Position).where(
+                Position.broker_account_id == order.broker_account_id,
+                Position.symbol == order.symbol,
+            ).with_for_update()
+            pos_result = await session.execute(pos_stmt)
+            pos = pos_result.scalar_one_or_none()
+
+            estimated_gross = (
+                execution_price * order.volume
+                if execution_price is not None
+                else Decimal("0")
+            )
+            estimated_commission = max(
+                estimated_gross * account.commission_rate,
+                account.minimum_commission,
+            ).quantize(Decimal("0.01"))
+
+            if execution_price is None:
+                broker_result = OrderResult(
+                    broker_order_id=f"MOCK-REJECTED-{order.id}",
+                    status="rejected",
+                    message="No market price available",
+                )
+            elif (
+                account.broker_type == "mock"
+                and order.side == "sell"
+                and (pos is None or pos.volume < order.volume)
+            ):
+                broker_result = OrderResult(
+                    broker_order_id=f"MOCK-REJECTED-{order.id}",
+                    status="rejected",
+                    message="Insufficient position",
+                )
+            elif (
+                account.broker_type == "mock"
+                and order.side == "buy"
+                and account.cash_balance < estimated_gross + estimated_commission
+            ):
+                broker_result = OrderResult(
+                    broker_order_id=f"MOCK-REJECTED-{order.id}",
+                    status="rejected",
+                    message="Insufficient cash",
+                )
+            else:
+                broker_result = adapter.place_order(request)
 
             # 状态流转校验
             allowed_next = STATUS_TRANSITIONS.get(order.status, set())
@@ -149,39 +211,65 @@ async def _dispatch_one(
             order.broker_order_id = broker_result.broker_order_id
             order.updated_at = now
 
+            previous_filled = order.filled_volume or Decimal("0")
             filled = broker_result.filled_volume
+            filled_delta = Decimal("0")
             if filled is not None and filled > 0:
-                order.filled_volume = (order.filled_volume or Decimal("0")) + filled
-            elif broker_result.status in ("filled", "partial_filled"):
-                order.filled_volume = order.volume
+                filled_delta = min(filled, order.volume - previous_filled)
+            elif broker_result.status == "filled":
+                filled_delta = order.volume - previous_filled
+            order.filled_volume = previous_filled + filled_delta
+
+            fill_gross = (execution_price or Decimal("0")) * filled_delta
+            fill_commission = Decimal("0")
+            fill_stamp_duty = Decimal("0")
+            if filled_delta > 0:
+                fill_commission = max(
+                    fill_gross * account.commission_rate,
+                    account.minimum_commission,
+                ).quantize(Decimal("0.01"))
+                if order.side == "sell":
+                    fill_stamp_duty = (
+                        fill_gross * account.stamp_duty_rate
+                    ).quantize(Decimal("0.01"))
+                order.filled_price = execution_price
+                order.commission += fill_commission
+                order.stamp_duty += fill_stamp_duty
 
             # ── 更新 Position ──
-            if broker_result.status in ("filled", "partial_filled"):
-                pos_stmt = select(Position).where(
-                    Position.broker_account_id == order.broker_account_id,
-                    Position.symbol == order.symbol,
-                ).with_for_update()
-                pos_result = await session.execute(pos_stmt)
-                pos = pos_result.scalar_one_or_none()
-
+            if broker_result.status in ("filled", "partial_filled") and filled_delta > 0:
                 if order.side == "buy":
                     if pos:
-                        total_cost = pos.avg_cost * pos.volume + (order.price or 0) * order.volume
-                        pos.volume += order.volume
+                        total_cost = (
+                            pos.avg_cost * pos.volume
+                            + (execution_price or 0) * filled_delta
+                            + fill_commission
+                        )
+                        pos.volume += filled_delta
                         pos.avg_cost = total_cost / pos.volume
                     else:
                         pos = Position(
                             broker_account_id=order.broker_account_id,
                             symbol=order.symbol,
-                            volume=order.volume,
-                            avg_cost=order.price or 0,
+                            volume=filled_delta,
+                            avg_cost=(fill_gross + fill_commission) / filled_delta,
                         )
                         session.add(pos)
                 elif order.side == "sell" and pos is not None:
-                    pos.volume -= order.volume
+                    pos.volume -= filled_delta
+
+                if account.broker_type == "mock":
+                    if order.side == "buy":
+                        account.cash_balance -= fill_gross + fill_commission
+                    else:
+                        account.cash_balance += (
+                            fill_gross - fill_commission - fill_stamp_duty
+                        )
 
                 if pos is not None:
                     pos.updated_at = now
+                    if pos.volume == 0:
+                        await session.delete(pos)
 
             # ── 写审计日志 ──
             audit = AuditLog(
@@ -197,6 +285,9 @@ async def _dispatch_one(
                     "volume": float(order.volume),
                     "result_status": broker_result.status,
                     "broker_order_id": broker_result.broker_order_id,
+                    "filled_price": float(order.filled_price) if order.filled_price else None,
+                    "commission": float(order.commission),
+                    "stamp_duty": float(order.stamp_duty),
                     "via_outbox": True,
                     "outbox_id": outbox_id,
                 },

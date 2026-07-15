@@ -43,39 +43,22 @@ class MockAdapter(BrokerAdapter):
 
     def place_order(self, request: OrderRequest) -> OrderResult:
         broker_order_id = f"MOCK-{uuid.uuid4().hex[:12].upper()}"
-        cost = request.volume * request.price if request.price else Decimal("0")
-
-        if request.side == "buy":
-            if cost > self._cash:
-                return OrderResult(
-                    broker_order_id=broker_order_id,
-                    status="rejected",
-                    message="Insufficient cash",
-                )
-            self._cash -= cost
-            existing = self._positions.get(request.symbol)
-            if existing:
-                total_volume = existing["volume"] + request.volume
-                total_cost = existing["avg_cost"] * existing["volume"] + cost
-                existing["volume"] = total_volume
-                existing["avg_cost"] = total_cost / total_volume if total_volume > 0 else Decimal("0")
-            else:
-                self._positions[request.symbol] = {
-                    "volume": request.volume,
-                    "avg_cost": request.price or Decimal("0"),
-                }
-        else:
-            existing = self._positions.get(request.symbol)
-            if not existing or existing["volume"] < request.volume:
-                return OrderResult(
-                    broker_order_id=broker_order_id,
-                    status="rejected",
-                    message="Insufficient position",
-                )
-            existing["volume"] -= request.volume
-            self._cash += cost
-            if existing["volume"] == 0:
-                del self._positions[request.symbol]
-
         self._orders[broker_order_id] = {"status": "filled"}
-        return OrderResult(broker_order_id=broker_order_id, status="filled")
+        return OrderResult(
+            broker_order_id=broker_order_id,
+            status="filled",
+            filled_volume=request.volume,
+        )
+
+    def cancel_order(self, broker_order_id: str) -> bool:
+        order = self._orders.get(broker_order_id)
+        if order is None or order["status"] == "filled":
+            return False
+        order["status"] = "cancelled"
+        return True
+
+    def get_orders(self) -> list[dict]:
+        return [
+            {"broker_order_id": broker_order_id, **order}
+            for broker_order_id, order in self._orders.items()
+        ]

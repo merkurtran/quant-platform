@@ -172,6 +172,12 @@ export interface BrokerAccount {
   broker_type: string;
   account_alias: string;
   status: string;
+  initial_cash: string;
+  cash_balance: string;
+  commission_rate: string;
+  minimum_commission: string;
+  stamp_duty_rate: string;
+  slippage_rate: string;
   created_at: string;
 }
 
@@ -187,6 +193,9 @@ export interface Order {
   price: string | null;
   volume: string;
   filled_volume: string;
+  filled_price: string | null;
+  commission: string;
+  stamp_duty: string;
   status: string;
   broker_order_id: string | null;
   origin: string;

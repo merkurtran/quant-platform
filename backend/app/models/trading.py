@@ -32,6 +32,12 @@ class BrokerAccount(Base):
     account_alias: Mapped[str] = mapped_column(String(64), nullable=False)
     credentials_encrypted: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="inactive")
+    initial_cash: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=1000000)
+    cash_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=1000000)
+    commission_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0.0003"))
+    minimum_commission: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=5)
+    stamp_duty_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0.0005"))
+    slippage_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0.0005"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -49,6 +55,9 @@ class Order(Base, TimestampMixin):
     price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 3), nullable=True)
     volume: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     filled_volume: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    filled_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 3), nullable=True)
+    commission: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    stamp_duty: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     # pending(已写库未提交) -> submitted(已提交券商)-> partial_filled(部分成交) -> filled(完全成交) -> cancelled(已撤) / rejected(被拒)
     # MockAdapter 下单是同步立即成交(pending 直接到 filled);
     # 真实券商是异步的,submitted 后需靠轮询或回调推进状态,中间可能停留数秒到数分钟

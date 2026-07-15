@@ -39,10 +39,12 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
   const { data: orders = [], isLoading: ordersLoading } = useQuery({
     queryKey: ["orders"],
     queryFn: () => tradingService.listOrders({ page: 1, page_size: 30 }),
+    refetchInterval: 2_000,
   });
   const { data: positions = [], isLoading: positionsLoading } = useQuery({
     queryKey: ["positions"],
     queryFn: tradingService.listPositions,
+    refetchInterval: 2_000,
   });
 
   const cancelMutation = useMutation({

@@ -20,6 +20,7 @@ export default function PositionsPage() {
   const { data: positions, isLoading } = useQuery({
     queryKey: ["positions"],
     queryFn: tradingService.listPositions,
+    refetchInterval: 2_000,
   });
 
   return (

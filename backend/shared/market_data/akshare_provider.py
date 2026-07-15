@@ -143,7 +143,7 @@ class AKShareProvider(MarketDataProvider):
                     })
             except KeyError as e:
                 raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
-        
+
         # 配股
         try:
             rights_df = ak.stock_history_dividend_detail(symbol=raw_symbol, indicator="配股")
@@ -170,3 +170,5 @@ class AKShareProvider(MarketDataProvider):
                     })
             except KeyError as e:
                 raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
+
+        return results

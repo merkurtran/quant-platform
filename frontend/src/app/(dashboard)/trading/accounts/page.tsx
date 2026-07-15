@@ -35,28 +35,35 @@ import {
 } from "@/components/ui/select";
 import { EmptyState } from "@/components/layout/empty-state";
 import { TableSkeleton } from "@/components/layout/loading-skeleton";
-import { formatDate } from "@/lib/format";
+import { formatDate, formatMoney } from "@/lib/format";
 import { toast } from "sonner";
 
 export default function AccountsPage() {
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
   const [alias, setAlias] = useState("");
+  const [initialCash, setInitialCash] = useState("1000000");
   const [brokerType, setBrokerType] = useState("mock");
   const [deleteId, setDeleteId] = useState<number | null>(null);
 
   const { data: accounts, isLoading } = useQuery({
     queryKey: ["broker-accounts"],
     queryFn: tradingService.listAccounts,
+    refetchInterval: 2_000,
   });
 
   const createMutation = useMutation({
     mutationFn: () =>
-      tradingService.createAccount({ broker_type: brokerType, account_alias: alias }),
+      tradingService.createAccount({
+        broker_type: brokerType,
+        account_alias: alias,
+        initial_cash: initialCash,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["broker-accounts"] });
       setOpen(false);
       setAlias("");
+      setInitialCash("1000000");
       toast.success("创建成功");
     },
   });
@@ -117,6 +124,12 @@ export default function AccountsPage() {
                 <p className="mt-3 text-xs text-muted-foreground tabular-nums">
                   创建于 {formatDate(a.created_at)}
                 </p>
+                <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3 text-sm">
+                  <span className="text-muted-foreground">可用资金</span>
+                  <span className="font-semibold tabular-nums">
+                    {formatMoney(Number(a.cash_balance))}
+                  </span>
+                </div>
                 <div className="mt-3 flex justify-end">
                   <Button
                     variant="ghost"
@@ -139,6 +152,15 @@ export default function AccountsPage() {
             <DialogTitle>添加券商账户</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="initial-cash">初始资金 *</Label>
+              <Input
+                id="initial-cash"
+                inputMode="decimal"
+                value={initialCash}
+                onChange={(e) => setInitialCash(e.target.value)}
+              />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="alias">账户别名 *</Label>
               <Input
@@ -163,7 +185,7 @@ export default function AccountsPage() {
           <DialogFooter>
             <Button
               onClick={() => createMutation.mutate()}
-              disabled={!alias || createMutation.isPending}
+              disabled={!alias || !initialCash || createMutation.isPending}
             >
               创建
             </Button>

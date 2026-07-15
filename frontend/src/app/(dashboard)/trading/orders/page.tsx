@@ -81,6 +81,7 @@ export default function OrdersPage() {
       tradingService.listOrders(
         statusFilter === "all" ? {} : { status: statusFilter }
       ),
+    refetchInterval: 2_000,
   });
 
   const createMutation = useMutation({
@@ -96,6 +97,7 @@ export default function OrdersPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["positions"] });
+      queryClient.invalidateQueries({ queryKey: ["broker-accounts"] });
       setCreateOpen(false);
       setSymbol("");
       setPrice("");

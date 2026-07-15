@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime, timezone
 
@@ -7,6 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.exceptions import BizException, BizErrorCode
 from app.models.trading import AuditLog, BrokerAccount, Order, Position
+from shared.redis_client import get_async_redis_client
+
+
+ORDER_QUEUE = "trade:order_queue"
 
 
 async def create_order(
@@ -37,7 +42,7 @@ async def create_order(
         broker_account_id=broker_account_id,
         strategy_id=strategy_id,
         client_order_id=client_order_id,
-        symbol=symbol,
+        symbol=symbol.upper(),
         side=side,
         order_type=order_type,
         price=price,
@@ -63,6 +68,17 @@ async def create_order(
     session.add(audit)
     await session.commit()
     await session.refresh(order)
+    redis_client = get_async_redis_client()
+    await redis_client.rpush(
+        ORDER_QUEUE,
+        json.dumps(
+            {
+                "user_id": user_id,
+                "broker_account_id": broker_account_id,
+                "client_order_id": client_order_id,
+            }
+        ),
+    )
     return order
 
 
@@ -124,8 +140,12 @@ async def get_orders(
 
 async def get_positions(
     session: AsyncSession,
-    broker_account_id: int,
+    user_id: int,
 ) -> list[Position]:
-    stmt = select(Position).where(Position.broker_account_id == broker_account_id)
+    stmt = (
+        select(Position)
+        .join(BrokerAccount, BrokerAccount.id == Position.broker_account_id)
+        .where(BrokerAccount.user_id == user_id)
+    )
     result = await session.execute(stmt)
     return list(result.scalars().all())

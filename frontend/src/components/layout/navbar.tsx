@@ -42,7 +42,9 @@ export function Navbar() {
   const { data: positions } = useQuery({
     queryKey: ["positions"],
     queryFn: tradingService.listPositions,
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchInterval: 2_000,
+    refetchOnWindowFocus: true,
   });
 
   const positionCount = positions?.length ?? 0;
