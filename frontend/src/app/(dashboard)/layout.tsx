@@ -12,10 +12,10 @@ export default function DashboardLayout({
   return (
     <AuthGuard>
       <MarketSocketProvider>
-        <div className="flex h-screen flex-col gap-px bg-border/70">
+        <div className="flex h-screen flex-col bg-card">
           <GlobalLoadingIndicator />
           <Navbar />
-          <div className="flex min-h-0 flex-1 gap-px overflow-hidden">
+          <div className="flex min-h-0 flex-1 overflow-hidden">
             <main className="flex-1 overflow-hidden bg-background">{children}</main>
             <RightNav />
           </div>

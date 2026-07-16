@@ -7,6 +7,7 @@ from pydantic import ValidationError
 
 from app.api.strategies import _backtest_summary
 from app.schemas.strategy import BacktestRequest
+from workers.strategy_worker.backtest_runner import _calculate_simple_return
 
 
 def test_backtest_history_summary_keeps_run_context_and_metrics():
@@ -65,3 +66,7 @@ def test_backtest_request_rejects_unreasonable_execution_rates():
             commission_rate=Decimal("0.2"),
             symbols=["600519.SH"],
         )
+
+
+def test_total_return_uses_simple_portfolio_return_instead_of_log_return():
+    assert _calculate_simple_return(1_000_000, 875_000) == pytest.approx(-0.125)

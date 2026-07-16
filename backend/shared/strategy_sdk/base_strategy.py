@@ -33,7 +33,7 @@ class BaseStrategy(bt.Strategy):
                     self.buy()
             else:
                 if self.data.close[0] < self.sma[0]:
-                    self.sell()
+                    self.close()
     
     ```
     
@@ -55,6 +55,10 @@ class BaseStrategy(bt.Strategy):
     - `notify_trade(trade)`: 交易完成通知
     - `notify_cashvalue(cash, value)`: 账户价值变化通知
     - `start()` / `stop()`: 策略开始/结束时的钩子
+
+    ### 4. 默认仓位
+    - 回测引擎默认使用 95% 可用资金，并按 A 股 100 股整手下单
+    - 调用 `self.buy(size=...)` 可覆盖默认仓位
     """
 
     # ==================== 工具方法 ====================

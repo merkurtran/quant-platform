@@ -84,7 +84,7 @@ export function StockSearch({
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
-      <div className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-1.5 transition-colors focus-within:bg-muted">
+      <div className="flex h-9 items-center gap-2 rounded-full border border-transparent bg-muted px-3 transition-colors focus-within:border-border focus-within:bg-card">
         <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
         <input
           ref={inputRef}
@@ -119,7 +119,7 @@ export function StockSearch({
       </div>
 
       {open && debounced && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1.5 max-h-96 overflow-y-auto rounded-lg bg-popover shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-96 overflow-y-auto rounded-lg border bg-popover shadow-lg">
           {list.length === 0 && !isLoading ? (
             <div className="px-4 py-8 text-center text-sm text-muted-foreground">
               未找到匹配的股票
@@ -138,7 +138,7 @@ export function StockSearch({
                         : "hover:bg-accent/50"
                     )}
                   >
-                    <span className="font-medium tabular-nums text-primary">
+                    <span className="font-medium tabular-nums text-foreground">
                       {stock.symbol}
                     </span>
                     <span className="flex-1 truncate text-foreground">

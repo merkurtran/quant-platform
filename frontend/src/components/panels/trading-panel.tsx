@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, CreditCard, Wallet } from "lucide-react";
+import { Ban, CreditCard, Loader2, Wallet } from "lucide-react";
 import { tradingService } from "@/services/trading";
 import { OrderTicket } from "@/components/panels/order-ticket";
 import { Button } from "@/components/ui/button";
@@ -31,7 +32,11 @@ const CANCELLABLE_STATUSES = ["pending", "submitted", "partial_filled"];
 
 export function TradingPanel({ symbol }: TradingPanelProps) {
   const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
   const [cancelId, setCancelId] = useState<number | null>(null);
+  const [activeTab, setActiveTab] = useState("ticket");
+  const submittedOrderIdRef = useRef<number | null>(null);
+  const sourceRunId = searchParams.get("runId");
   const { data: accounts = [], isLoading: accountsLoading } = useQuery({
     queryKey: ["broker-accounts"],
     queryFn: tradingService.listAccounts,
@@ -56,16 +61,48 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
     },
   });
 
+  const createAccountMutation = useMutation({
+    mutationFn: () =>
+      tradingService.createAccount({
+        broker_type: "mock",
+        account_alias: "默认模拟账户",
+        initial_cash: "1000000",
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["broker-accounts"] });
+      toast.success("模拟账户已创建");
+    },
+  });
+
+  useEffect(() => {
+    if (submittedOrderIdRef.current === null) return;
+    const submittedOrder = orders.find((order) => order.id === submittedOrderIdRef.current);
+    if (!submittedOrder) return;
+    if (submittedOrder.status === "filled") {
+      toast.success("订单已成交");
+      submittedOrderIdRef.current = null;
+    } else if (submittedOrder.status === "rejected") {
+      toast.error(`订单已拒绝：${submittedOrder.reject_reason ?? "请检查委托条件"}`);
+      submittedOrderIdRef.current = null;
+    } else if (submittedOrder.status === "cancelled") {
+      toast.info("订单已撤销");
+      submittedOrderIdRef.current = null;
+    }
+  }, [orders]);
+
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <div className="flex h-10 items-center justify-between px-3">
-        <h3 className="text-xs font-semibold">交易</h3>
+        <div>
+          <h3 className="text-xs font-semibold">交易</h3>
+          {sourceRunId && <p className="text-[10px] text-muted-foreground">承接回测 #{sourceRunId}</p>}
+        </div>
         <Button variant="ghost" size="icon" className="h-7 w-7" asChild>
           <Link href="/trading/accounts" title="券商账户"><CreditCard className="h-3.5 w-3.5" /></Link>
         </Button>
       </div>
 
-      <Tabs defaultValue="ticket" className="flex min-h-0 flex-1 flex-col border-t border-border/70">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col border-t border-border/70">
         <TabsList className="mx-3 mt-2 grid h-8 grid-cols-3">
           <TabsTrigger value="ticket" className="text-xs">下单</TabsTrigger>
           <TabsTrigger value="orders" className="text-xs">订单</TabsTrigger>
@@ -76,9 +113,22 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
           {accountsLoading ? (
             <PanelLoading />
           ) : accounts.length ? (
-            <OrderTicket accounts={accounts} symbol={symbol} />
+            <OrderTicket
+              accounts={accounts}
+              symbol={symbol}
+              onSubmitted={(order) => {
+                submittedOrderIdRef.current = order.id;
+                setActiveTab("orders");
+              }}
+            />
           ) : (
-            <PanelEmpty icon={<CreditCard className="h-7 w-7" />} text="请先添加券商账户" href="/trading/accounts" action="添加账户" />
+            <PanelEmpty
+              icon={<CreditCard className="h-7 w-7" />}
+              text="创建模拟账户后即可按真实规则下单"
+              action="创建默认模拟账户"
+              loading={createAccountMutation.isPending}
+              onAction={() => createAccountMutation.mutate()}
+            />
           )}
         </TabsContent>
 
@@ -161,8 +211,10 @@ interface PanelEmptyProps {
   text: string;
   href?: string;
   action?: string;
+  loading?: boolean;
+  onAction?: () => void;
 }
 
-function PanelEmpty({ icon, text, href, action }: PanelEmptyProps) {
-  return <div className="flex h-48 flex-col items-center justify-center gap-2 text-muted-foreground">{icon}<p className="text-xs">{text}</p>{href && action && <Button variant="secondary" size="sm" asChild><Link href={href}>{action}</Link></Button>}</div>;
+function PanelEmpty({ icon, text, href, action, loading, onAction }: PanelEmptyProps) {
+  return <div className="flex h-48 flex-col items-center justify-center gap-2 px-5 text-center text-muted-foreground">{icon}<p className="text-xs">{text}</p>{href && action && <Button variant="secondary" size="sm" asChild><Link href={href}>{action}</Link></Button>}{onAction && action && <Button size="sm" className="rounded-full" onClick={onAction} disabled={loading}>{loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{action}</Button>}</div>;
 }

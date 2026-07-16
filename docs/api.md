@@ -300,8 +300,8 @@ condition 按 `rule_type` 区分（discriminated union）：
   "params_snapshot": {"fast_period": 5, "slow_period": 20},
   "created_at": "2026-07-15T10:00:00+08:00", "finished_at": "2026-07-15T10:00:03+08:00",
   "result": {
-    "total_return": 15.32, "annual_return": 12.50,
-    "max_drawdown": -8.50, "sharpe_ratio": 1.2345,
+    "total_return": 0.1532, "annual_return": 0.1250,
+    "max_drawdown": 8.50, "sharpe_ratio": 1.2345,
     "win_rate": 55.00, "trade_count": 42,
     "equity_curve": [{ "date": "2025-01-02", "equity": 1000000 }]
   },
@@ -310,6 +310,8 @@ condition 按 `rule_type` 区分（discriminated union）：
 ```
 
 status 值：`queued` / `running` / `success` / `failed`（错误 `20001` 404）
+
+`total_return` 与 `annual_return` 均为小数，前端展示时乘以 100；`max_drawdown` 是百分比幅度。总收益率按期末权益除以初始资金计算，不使用 Backtrader 的对数收益 `rtot`。未显式指定订单 `size` 的策略默认使用 95% 可用资金，并按 100 股整手取整。
 
 ---
 
@@ -341,7 +343,7 @@ A 股委托量必须为整数且是 100 股的倍数。模拟盘仅在交易所�
 
 模拟盘执行 T+1：当日买入计入 `pending_settlement_volume`，下一交易日才转入 `available_volume`。卖单只能冻结和卖出可卖持仓。
 
-历史回测的 Backtrader 成交填充器使用相同的板块涨跌幅与 T+1 约束；一字涨停买单和一字跌停卖单不会被计作成交。
+历史回测的 Backtrader 成交填充器使用相同的板块涨跌幅与 T+1 约束；一字涨停买单和一字跌停卖单不会被计作成交。默认仓位规则同上，策略显式传入 `size` 时优先使用策略值。
 
 **响应 data：** `OrderOut`
 

@@ -29,7 +29,7 @@ export function RightNav() {
   const { theme, toggleTheme, _hasHydrated } = useThemeStore();
 
   return (
-    <nav className="relative z-40 flex w-12 shrink-0 flex-col items-center bg-card py-3">
+    <nav className="relative z-40 flex w-14 shrink-0 flex-col items-center border-l bg-card py-3">
       {/* 居中的导航图标 */}
       <div className="flex flex-1 flex-col items-center gap-1">
         {NAV_ITEMS.map((item) => {
@@ -58,14 +58,14 @@ export function RightNav() {
               key={item.label}
               href={href}
               className={cn(
-                "group relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors",
+                "group relative flex h-9 w-9 items-center justify-center rounded-full transition-colors",
                 isActive
-                  ? "bg-muted text-primary"
+                  ? "bg-foreground text-background"
                   : "text-muted-foreground hover:bg-muted hover:text-foreground"
               )}
             >
               <Icon className="h-5 w-5" strokeWidth={1.5} />
-              <span className="pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+              <span className="pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background opacity-0 shadow-md transition-opacity group-hover:opacity-100">
                 {item.label}
               </span>
             </Link>
@@ -77,7 +77,7 @@ export function RightNav() {
       {_hasHydrated && (
         <button
           onClick={toggleTheme}
-          className="group relative mt-auto flex h-9 w-9 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          className="group relative mt-auto flex h-9 w-9 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           title="切换主题"
         >
           {theme === "light" ? (
@@ -85,7 +85,7 @@ export function RightNav() {
           ) : (
             <Sun className="h-5 w-5" strokeWidth={1.5} />
           )}
-          <span className="pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded-md bg-popover px-2 py-1 text-xs text-foreground opacity-0 shadow-md transition-opacity group-hover:opacity-100">
+          <span className="pointer-events-none absolute right-full z-50 mr-2 whitespace-nowrap rounded-md bg-foreground px-2 py-1 text-xs text-background opacity-0 shadow-md transition-opacity group-hover:opacity-100">
             {theme === "light" ? "暗色模式" : "亮色模式"}
           </span>
         </button>

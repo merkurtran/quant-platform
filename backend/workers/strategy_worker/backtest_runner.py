@@ -34,7 +34,7 @@ from shared.strategy_sdk.base_strategy import BaseStrategy
 from shared.db.session import SessionLocal 
 from app.models.market import Klines
 from app.services.market_service import get_klines_with_adjustment, AdjustMethod 
-from app.services.a_share_trading_rules import AShareBacktestFiller
+from app.services.a_share_trading_rules import AShareBacktestFiller, ASharePercentSizer
 
 logger = logging.getLogger(__name__)
 
@@ -493,6 +493,12 @@ def _get_memory_usage() -> Optional[float]:
         return None
 
 
+def _calculate_simple_return(initial_value: float, final_value: float) -> float | None:
+    if initial_value <= 0:
+        return None
+    return final_value / initial_value - 1
+
+
 def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
     """
     在子进程中实际执行的回测逻辑
@@ -586,6 +592,7 @@ def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
             
             # 添加策略（使用过滤后的参数）
             cerebro.addstrategy(UserStrategy, **config.strategy_params)
+            cerebro.addsizer(ASharePercentSizer)
             
             # 配置经纪人
             cerebro.broker.setcash(float(config.initial_capital))
@@ -656,7 +663,10 @@ def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
             # 构建结果
             return BacktestResult(
                 success=True,
-                total_return=returns_analysis.get('rtot'),
+                total_return=_calculate_simple_return(
+                    float(config.initial_capital),
+                    float(cerebro.broker.getvalue()),
+                ),
                 annual_return=returns_analysis.get('rnorm'),
                 max_drawdown=drawdown_analysis.get('max', {}).get('drawdown'),
                 sharpe_ratio=sharpe_analysis.get('sharperatio'),

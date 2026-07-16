@@ -7,34 +7,34 @@
   --radius: 0.5rem; /* 8px */
 
   /* 主内容区：浅灰底 */
-  --background: #f0f3fa;
-  --foreground: #111827;
+  --background: #f7f7f8;
+  --foreground: #101010;
 
   /* 卡片/侧边栏：白底浮于灰底之上 */
   --card: #ffffff;
-  --card-foreground: #111827;
+  --card-foreground: #101010;
 
   --popover: #ffffff;
-  --popover-foreground: #111827;
+  --popover-foreground: #101010;
 
-  --primary: #2563eb;
+  --primary: #101010;
   --primary-foreground: #ffffff;
 
-  --secondary: #f0f3fa;
-  --secondary-foreground: #111827;
+  --secondary: #f4f4f6;
+  --secondary-foreground: #101010;
 
-  --muted: #f0f3fa;
-  --muted-foreground: #6b7280;
+  --muted: #f4f4f6;
+  --muted-foreground: #737373;
 
-  --accent: #f4f6fb;
-  --accent-foreground: #111827;
+  --accent: #eeeef0;
+  --accent-foreground: #101010;
 
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
 
-  --border: #e0e3eb;
-  --input: #d1d4dc;
-  --ring: #2563eb;
+  --border: #e5e5e7;
+  --input: #d4d4d8;
+  --ring: #101010;
 
   /* 业务语义色 */
   --success: #22c55e;
@@ -362,6 +362,8 @@
   --card-foreground: #d1d4dc;
   --popover: #1e222d;
   --popover-foreground: #d1d4dc;
+  --primary: #f5f5f5;
+  --primary-foreground: #111111;
   --secondary: #2a2e39;
   --secondary-foreground: #d1d4dc;
   --muted: #2a2e39;
@@ -431,7 +433,7 @@
   input[type="datetime-local"],
   input[type="time"] {
     color-scheme: light;
-    accent-color: #2563eb;
+    accent-color: #101010;
   }
   /* Chrome / Edge */
   input[type="date"]::-webkit-calendar-picker-indicator,

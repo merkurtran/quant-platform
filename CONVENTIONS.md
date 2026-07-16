@@ -469,7 +469,9 @@ pending → submitted → partial_filled → filled
                           ↘ rejected
 ```
 
-Mock 券商下同步立即成交（pending → filled）。
+Mock 券商也走异步执行链：`pending → submitted → filled / rejected`。API 返回仅代表订单已进入队列，前端必须轮询终态，并对本次提交订单的成交、拒绝或撤销给出通知。
+
+模拟盘与回测共同遵守 A 股 100 股整手、T+1、交易日/连续竞价和板块涨跌停约束。未触价限价单保持 `submitted`，不能显示为已成交。
 
 ### 12.2 订单字段
 
@@ -484,7 +486,7 @@ Mock 券商下同步立即成交（pending → filled）。
 
 ### 12.3 前端约定
 
-- 买入按钮红色（A 股惯例），卖出按钮绿色。
+- 买卖方向用红/绿文字与浅色选中态表达，最终提交按钮使用中性主按钮，避免大面积高饱和色。
 - 撤单需二次确认（AlertDialog）。
 - 订单列表支持按 `status` / `symbol` / `strategy_id` 筛选。
 
@@ -502,6 +504,8 @@ Mock 券商下同步立即成交（pending → filled）。
 回测运行状态：`queued` → `running` → `success` / `failed`。
 
 发起回测后返回 `run_id`，前端需**轮询** `GET /api/v1/backtest_runs/{run_id}` 直到 `status` 为 `success` 或 `failed`。
+
+回测默认仓位为 95% 可用资金并按 100 股整手取整；策略显式传入 `size` 时覆盖默认值。`total_return` 是普通组合收益率小数（`final_equity / initial_capital - 1`），不是 Backtrader `rtot` 对数收益。
 
 ---
 
@@ -529,20 +533,24 @@ Mock 券商下同步立即成交（pending → filled）。
 | `/register` | 注册 |
 | `/market` | 行情 / 自选股（右侧默认面板） |
 | `/market?panel=alerts` | 行情页 + 右侧告警面板（K 线保留左侧） |
-| `/market?panel=ai` | 行情页 + 右侧 AI 面板（K 线保留左侧） |
+| `/market?panel=backtest&strategyId=1` | 行情页 + 策略回测面板；结果显示在左侧 |
+| `/market?panel=trading&runId=1` | 行情页 + 交易面板；保留来源回测上下文 |
 | `/market?symbol=600519.SH` | 行情页 + 指定股票 K 线 |
 | `/market/[symbol]` | 个股详情 / K 线 |
 | `/strategies` | 策略列表 |
 | `/strategies/[id]` | 策略详情 / 编辑 |
-| `/strategies/[id]/backtest` | 回测结果 |
 | `/trading/orders` | 订单 |
 | `/trading/positions` | 持仓 |
 | `/trading/accounts` | 券商账户 |
 | `/alerts` | 告警规则（独立页面，仍可用） |
 | `/alerts/[id]/logs` | 告警日志 |
-| `/ai` | AI 助手（独立页面，仍可用） |
 
-> **面板切换**：告警和 AI 的主入口是 `/market?panel=alerts|ai`（在行情页右侧面板展示），独立页面 `/alerts` 和 `/ai` 仍保留可用。
+> **面板切换**：AI 不作为独立主入口；个股事件分析位于默认行情面板下半部，策略生成位于策略编辑页。桌面端保留 K 线，移动端在 K 线与功能面板之间切换。
+
+### 15.1 账号会话边界
+
+- 登录用户发生变化或退出登录时，必须清空 React Query 缓存、行情快照、订阅列表和最后选股。
+- 主题属于设备偏好，可跨账号保留；持仓、策略、自选股和选股上下文不得跨账号复用。
 
 ---
 

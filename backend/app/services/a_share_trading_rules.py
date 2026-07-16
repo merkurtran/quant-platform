@@ -4,6 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from functools import lru_cache
 from zoneinfo import ZoneInfo
 
+import backtrader as bt
 import exchange_calendars as exchange_calendars
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -237,3 +238,21 @@ class AShareBacktestFiller:
             Decimal("0"),
         )
         return float(min(remaining, available))
+
+
+class ASharePercentSizer(bt.Sizer):
+    """Use most available cash while keeping A-share orders in board lots."""
+
+    params = (("percents", 95), ("lot_size", 100))
+
+    def _getsizing(self, comminfo, cash, data, isbuy):
+        if not isbuy:
+            position = self.broker.getposition(data)
+            return max(int(position.size), 0)
+
+        price = float(data.close[0])
+        if price <= 0:
+            return 0
+        budget = float(cash) * float(self.params.percents) / 100
+        lots = int(budget / price) // int(self.params.lot_size)
+        return lots * int(self.params.lot_size)

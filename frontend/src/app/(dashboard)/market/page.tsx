@@ -242,9 +242,14 @@ export default function MarketPage() {
   };
 
   return (
-    <div className="flex h-full gap-px overflow-hidden bg-border/70">
+    <div className="flex h-full min-w-0 gap-px overflow-hidden bg-border/70">
       {/* ── 主区（K线 + 周期） — 用浅灰缝隙分隔工具栏与图表 ── */}
-      <div className="flex flex-1 flex-col gap-px overflow-hidden bg-border/60">
+      <div
+        className={cn(
+          "min-w-0 flex-1 flex-col gap-px overflow-hidden bg-border/60 sm:flex",
+          panel && !showBacktestResult ? "hidden" : "flex"
+        )}
+      >
         {/* 顶部信息栏 — 白底浮于浅灰底之上 */}
         <div className="flex h-12 items-center gap-4 bg-card px-4">
           {symbol ? (
@@ -338,7 +343,7 @@ export default function MarketPage() {
         </div>
 
         {/* 周期切换 - 底部，白底浮于灰底 */}
-        {!showBacktestResult && <div className="flex h-10 items-center gap-1 bg-card px-3">
+        {!showBacktestResult && <div className="flex h-10 items-center gap-1 overflow-x-auto bg-card px-3">
           {QUICK_PERIODS.map((p) => (
             <button
               key={p.value}
@@ -373,10 +378,11 @@ export default function MarketPage() {
       {!fullscreen && (
         <aside
           className={cn(
-            "flex shrink-0 flex-col bg-card",
+            "shrink-0 flex-col bg-card sm:flex",
+            panel && !showBacktestResult ? "flex w-full" : "hidden",
             panel === "backtest" || panel === "trading"
-              ? "w-96"
-              : "w-80"
+              ? "sm:w-96"
+              : "sm:w-80"
           )}
         >
           {panel === "alerts" ? (

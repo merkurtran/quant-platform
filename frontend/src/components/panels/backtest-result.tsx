@@ -1,5 +1,7 @@
-import { Activity, CheckCircle2 } from "lucide-react";
+import Link from "next/link";
+import { Activity, ArrowLeftRight, CheckCircle2 } from "lucide-react";
 import { EquityCurveChart } from "@/components/chart/equity-curve-chart";
+import { Button } from "@/components/ui/button";
 import { formatMoney, formatPercent } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import type { BacktestRunResult } from "@/types";
@@ -47,10 +49,18 @@ export function BacktestResult({ backtest }: BacktestResultProps) {
               手续费率 {formatRate(backtest.run.commission_rate)} · 滑点率 {formatRate(backtest.run.slippage_rate)}
             </p>
           </div>
-          <span className="inline-flex h-6 items-center gap-1.5 rounded bg-success/10 px-2 text-xs font-medium text-success">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            已完成 · #{backtest.run.run_id}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex h-7 items-center gap-1.5 rounded-full bg-success/10 px-3 text-xs font-medium text-success">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              已完成 · #{backtest.run.run_id}
+            </span>
+            <Button size="sm" className="rounded-full" asChild>
+              <Link href={`/market?symbol=${encodeURIComponent(backtest.symbol)}&panel=trading&runId=${backtest.run.run_id}`}>
+                <ArrowLeftRight className="h-3.5 w-3.5" />
+                进入模拟交易
+              </Link>
+            </Button>
+          </div>
         </header>
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">

@@ -9,7 +9,7 @@ A 股个人量化交易平台 — 行情、策略、回测、模拟交易、告�
 ```
 .
 ├── backend/          # FastAPI 后端（Python 3.13 + SQLAlchemy 2.0 + TimescaleDB + Redis）
-├── frontend/         # Next.js 前端（待创建）
+├── frontend/         # Next.js 前端（首页、行情、策略、回测、交易）
 ├── data/             # Docker 持久化数据（PostgreSQL / Redis）
 ├── docker-compose.yml
 ├── AGENTS.md         # AI 开发规范（怎么写代码）
@@ -52,7 +52,7 @@ AI 编写前端代码前，按以下顺序阅读：
 - **包管理**：uv
 - **数据源**：腾讯财经 → mootdx → AKShare（三级降级）
 
-### 启动
+### 开发启动
 
 ```bash
 cd backend
@@ -60,6 +60,9 @@ cp .env.example .env  # 填写数据库 / JWT / LLM 配置
 uv sync
 uv run alembic upgrade head
 uv run python main.py  # 启动在 :8000
+uv run python workers/market_worker/main.py
+uv run python workers/strategy_worker/scheduler.py
+uv run python workers/trade_executor/adapters/main.py
 ```
 
 ### 基础设施
@@ -70,7 +73,7 @@ docker compose --env-file .env.docker up -d  # PostgreSQL + Redis
 
 ---
 
-## 前端（待创建）
+## 前端
 
 - **框架**：Next.js 15（App Router）
 - **语言**：TypeScript
@@ -79,9 +82,28 @@ docker compose --env-file .env.docker up -d  # PostgreSQL + Redis
 
 详见 `AGENTS.md` 技术栈与目录结构。
 
+```bash
+cd frontend
+pnpm install
+pnpm dev
+```
+
+## 一键部署
+
+Linux/WSL 部署环境可在项目根目录执行：
+
+```bash
+cp .env.docker.example .env.docker
+cp backend/.env.example backend/.env
+make deploy
+make status
+```
+
+`Makefile` 会启动基础设施、迁移、API、三个 Worker 与生产前端。若 `3000` 已被占用，使用 `make start FRONTEND_PORT=3002`。
+
 ---
 
 ## 当前阶段
 
 - ✅ 后端 Phase 1-3 完成（行情、策略、回测、交易、告警去重、AI 助手）
-- ⬜ 前端开发（进行中）
+- ✅ 前端首页、认证、行情、AI 分析、策略、回测与模拟交易主流程已接通

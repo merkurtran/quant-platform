@@ -11,6 +11,7 @@ interface MarketState {
   setQuote: (quote: QuoteMessage) => void;
   setQuotes: (quotes: QuoteMessage[]) => void;
   subscribe: (symbols: string[]) => void;
+  resetSession: () => void;
   _setHasHydrated: (value: boolean) => void;
 }
 
@@ -113,6 +114,8 @@ export const useMarketStore = create<MarketState>()(
             ? state
             : { subscribedSymbols: next };
         }),
+      resetSession: () =>
+        set({ selectedSymbol: null, quotes: {}, subscribedSymbols: [] }),
       _setHasHydrated: (_hasHydrated) => set({ _hasHydrated }),
     }),
     {

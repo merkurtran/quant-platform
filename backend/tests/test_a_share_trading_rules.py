@@ -8,6 +8,7 @@ import pytest
 from app.services.a_share_trading_rules import (
     PriceLimits,
     AShareBacktestFiller,
+    ASharePercentSizer,
     TradingRuleViolation,
     calculate_price_limits,
     clamp_execution_price,
@@ -161,3 +162,10 @@ def test_backtest_filler_prevents_selling_same_day_purchase():
 
     data.datetime.value = date(2026, 7, 17)
     assert filler(FakeOrder(data, "sell", 100, 100), Decimal("10.1"), 0) == 100
+
+
+def test_backtest_default_sizer_uses_cash_and_a_share_board_lots():
+    sizer = ASharePercentSizer(percents=95, lot_size=100)
+    data = SimpleNamespace(close=FakeLine(Decimal("10.03")))
+
+    assert sizer._getsizing(None, 100_000, data, True) == 9_400

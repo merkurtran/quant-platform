@@ -254,7 +254,26 @@ pnpm install > /dev/null 2>&1; echo $?
 
 ## 场景 7：同事拉代码后首次启动
 
-### 后端
+### 推荐：一键部署启动
+
+根目录 `Makefile` 会启动 PostgreSQL/Redis、执行迁移和构建，并拉起 API、market_worker、strategy_worker、trade_executor、前端五个进程。部署主机需提供 POSIX shell、GNU Make、Docker、uv、Node.js 和 pnpm。
+
+```bash
+cp .env.docker.example .env.docker
+cp backend/.env.example backend/.env
+make deploy
+make status
+```
+
+默认前端端口为 `3000`、API 为 `8000`。端口被占用时可覆盖：
+
+```bash
+make start FRONTEND_PORT=3002 API_PORT=8000
+```
+
+### 手动开发启动
+
+### 后端与 Worker
 
 ```bash
 # 前提：已安装 Python 3.13+、uv、Docker
@@ -274,8 +293,11 @@ uv sync
 # 4. 跑迁移
 uv run alembic upgrade head
 
-# 5. 启动
+# 5. 分别启动 API 与三个 Worker
 uv run python main.py
+uv run python workers/market_worker/main.py
+uv run python workers/strategy_worker/scheduler.py
+uv run python workers/trade_executor/adapters/main.py
 ```
 
 ### 前端
@@ -305,6 +327,9 @@ NEXT_PUBLIC_WS_URL=ws://<后端IP>:8000/ws/market
 # ── 后端 ──
 cd backend
 uv run python main.py                    # 启动后端 (:8000)
+uv run python workers/market_worker/main.py
+uv run python workers/strategy_worker/scheduler.py
+uv run python workers/trade_executor/adapters/main.py
 uv run alembic current                   # 查看当前迁移版本
 uv run alembic upgrade head              # 应用全部迁移
 uv run alembic revision --autogenerate -m "描述"  # 生成新迁移
