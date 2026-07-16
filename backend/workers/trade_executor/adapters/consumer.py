@@ -9,6 +9,15 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.a_share_trading_rules import (
+    TradingRuleViolation,
+    clamp_execution_price,
+    ensure_mock_market_open,
+    load_mock_market_state,
+    settle_position_for_trade_date,
+    shanghai_now,
+    validate_order_price,
+)
 from .risk_control import RiskControl
 
 logger = logging.getLogger(__name__)
@@ -105,27 +114,30 @@ async def _process_order(
             return
 
         if account.broker_type == "mock":
-            estimated_price = order.price
-            if estimated_price is None:
-                from app.models.market import Klines
-
-                price_result = await session.execute(
-                    select(Klines.close)
-                    .where(Klines.symbol == order.symbol)
-                    .order_by(Klines.ts.desc())
-                    .limit(1)
-                )
-                market_price = price_result.scalar_one_or_none()
-                if market_price is not None:
-                    direction = Decimal("1") if order.side == "buy" else Decimal("-1")
-                    estimated_price = market_price * (
-                        Decimal("1") + direction * account.slippage_rate
-                    )
-
             rejection_reason = None
-            if estimated_price is None:
+            market_state = None
+            try:
+                trade_date = ensure_mock_market_open(shanghai_now())
+                market_state = await load_mock_market_state(
+                    session, order.symbol, trade_date
+                )
+                validate_order_price(order.price, market_state.price_limits)
+            except TradingRuleViolation as exc:
+                rejection_reason = str(exc)
+
+            estimated_price = order.price
+            if estimated_price is None and market_state is not None:
+                direction = Decimal("1") if order.side == "buy" else Decimal("-1")
+                estimated_price = market_state.market_price * (
+                    Decimal("1") + direction * account.slippage_rate
+                )
+                estimated_price = clamp_execution_price(
+                    order.side, estimated_price, market_state.price_limits
+                )
+
+            if rejection_reason is None and estimated_price is None:
                 rejection_reason = "No market price available"
-            elif order.side == "buy":
+            elif rejection_reason is None and order.side == "buy":
                 gross = estimated_price * order.volume
                 commission = max(
                     gross * account.commission_rate,
@@ -138,7 +150,7 @@ async def _process_order(
                     account.cash_balance -= reserve
                     account.frozen_cash += reserve
                     order.reserved_cash = reserve
-            else:
+            elif rejection_reason is None:
                 pos_result = await session.execute(
                     select(Position)
                     .where(
@@ -148,13 +160,15 @@ async def _process_order(
                     .with_for_update()
                 )
                 position = pos_result.scalar_one_or_none()
+                if position is not None:
+                    settle_position_for_trade_date(position, trade_date)
                 available_volume = (
-                    position.volume - position.frozen_volume
+                    position.available_volume - position.frozen_volume
                     if position is not None
                     else Decimal("0")
                 )
                 if available_volume < order.volume:
-                    rejection_reason = "Insufficient position"
+                    rejection_reason = "可卖持仓不足（A 股当日买入需下一交易日卖出）"
                 else:
                     position.frozen_volume += order.volume
                     order.reserved_volume = order.volume

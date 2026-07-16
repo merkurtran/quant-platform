@@ -5,9 +5,13 @@ from datetime import datetime, timezone
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import get_settings
 from app.core.exceptions import BizException, BizErrorCode
 from app.models.trading import AuditLog, BrokerAccount, Order, Position, TradeOutbox
+from app.services.a_share_trading_rules import (
+    is_trading_day,
+    settle_position_for_trade_date,
+    shanghai_now,
+)
 from shared.redis_client import get_async_redis_client
 
 
@@ -199,4 +203,14 @@ async def get_positions(
         .where(BrokerAccount.user_id == user_id)
     )
     result = await session.execute(stmt)
-    return list(result.scalars().all())
+    positions = list(result.scalars().all())
+    trade_date = shanghai_now().date()
+    if is_trading_day(trade_date):
+        changed = False
+        for position in positions:
+            pending_before = position.pending_settlement_volume
+            settle_position_for_trade_date(position, trade_date)
+            changed = changed or position.pending_settlement_volume != pending_before
+        if changed:
+            await session.commit()
+    return positions

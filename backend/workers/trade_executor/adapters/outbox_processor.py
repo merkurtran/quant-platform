@@ -18,6 +18,16 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.services.a_share_trading_rules import (
+    TradingRuleViolation,
+    clamp_execution_price,
+    ensure_mock_market_open,
+    is_locked_against_order,
+    load_mock_market_state,
+    settle_position_for_trade_date,
+    shanghai_now,
+    validate_order_price,
+)
 from workers.trade_executor.adapters.base import OrderRequest, OrderResult
 from workers.trade_executor.adapters.registry import get_adapter
 
@@ -129,15 +139,33 @@ async def _dispatch_one(
             limit_price = (
                 Decimal(str(req_json["price"])) if req_json.get("price") else None
             )
-            from app.models.market import Klines
+            fill_trade_date = shanghai_now().date()
+            if account.broker_type == "mock":
+                try:
+                    fill_trade_date = ensure_mock_market_open(shanghai_now())
+                    market_state = await load_mock_market_state(
+                        session, order.symbol, fill_trade_date
+                    )
+                    validate_order_price(limit_price, market_state.price_limits)
+                except TradingRuleViolation:
+                    adapter.disconnect()
+                    return
+                market_price = market_state.market_price
+                if is_locked_against_order(
+                    order.side, market_price, market_state.price_limits
+                ):
+                    adapter.disconnect()
+                    return
+            else:
+                from app.models.market import Klines
 
-            price_result = await session.execute(
-                select(Klines.close)
-                .where(Klines.symbol == order.symbol)
-                .order_by(Klines.ts.desc())
-                .limit(1)
-            )
-            market_price = price_result.scalar_one_or_none()
+                price_result = await session.execute(
+                    select(Klines.close)
+                    .where(Klines.symbol == order.symbol)
+                    .order_by(Klines.ts.desc())
+                    .limit(1)
+                )
+                market_price = price_result.scalar_one_or_none()
 
             if req_json["order_type"] == "limit":
                 marketable = market_price is not None and limit_price is not None and (
@@ -154,6 +182,12 @@ async def _dispatch_one(
                     slippage = account.slippage_rate or Decimal("0")
                     direction = Decimal("1") if order.side == "buy" else Decimal("-1")
                     execution_price = market_price * (Decimal("1") + direction * slippage)
+                    if account.broker_type == "mock":
+                        execution_price = clamp_execution_price(
+                            order.side,
+                            execution_price,
+                            market_state.price_limits,
+                        )
 
             request = OrderRequest(
                 symbol=req_json["symbol"],
@@ -169,6 +203,8 @@ async def _dispatch_one(
             ).with_for_update()
             pos_result = await session.execute(pos_stmt)
             pos = pos_result.scalar_one_or_none()
+            if account.broker_type == "mock" and pos is not None:
+                settle_position_for_trade_date(pos, fill_trade_date)
 
             estimated_gross = (
                 execution_price * order.volume
@@ -189,7 +225,11 @@ async def _dispatch_one(
             elif (
                 account.broker_type == "mock"
                 and order.side == "sell"
-                and (pos is None or pos.volume < order.volume)
+                and (
+                    pos is None
+                    or pos.available_volume < order.volume
+                    or pos.frozen_volume < order.volume
+                )
             ):
                 broker_result = OrderResult(
                     broker_order_id=f"MOCK-REJECTED-{order.id}",
@@ -269,16 +309,22 @@ async def _dispatch_one(
                         )
                         pos.volume += filled_delta
                         pos.avg_cost = total_cost / pos.volume
+                        pos.pending_settlement_volume += filled_delta
+                        pos.last_buy_trade_date = fill_trade_date
                     else:
                         pos = Position(
                             broker_account_id=order.broker_account_id,
                             symbol=order.symbol,
                             volume=filled_delta,
                             avg_cost=(fill_gross + fill_commission) / filled_delta,
+                            available_volume=Decimal("0"),
+                            pending_settlement_volume=filled_delta,
+                            last_buy_trade_date=fill_trade_date,
                         )
                         session.add(pos)
                 elif order.side == "sell" and pos is not None:
                     pos.volume -= filled_delta
+                    pos.available_volume -= filled_delta
                     pos.frozen_volume -= min(pos.frozen_volume, filled_delta)
                     order.reserved_volume -= min(order.reserved_volume, filled_delta)
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useIsFetching, useIsMutating } from "@tanstack/react-query";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion } from "motion/react";
 
 export function GlobalLoadingIndicator() {
   const requestCount = useIsFetching() + useIsMutating();

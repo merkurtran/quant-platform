@@ -118,9 +118,17 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
               <span className="truncate font-medium tabular-nums">{position.symbol}</span>
               <span
                 className="text-right tabular-nums"
-                title={Number(position.frozen_volume) > 0 ? `冻结 ${formatVolume(position.frozen_volume)}` : undefined}
+                title={
+                  Number(position.pending_settlement_volume) > 0
+                    ? `T+1 待交收 ${formatVolume(position.pending_settlement_volume)}`
+                    : Number(position.frozen_volume) > 0
+                      ? `冻结 ${formatVolume(position.frozen_volume)}`
+                      : undefined
+                }
               >
-                {formatVolume(String(Number(position.volume) - Number(position.frozen_volume)))}
+                {formatVolume(
+                  String(Number(position.available_volume) - Number(position.frozen_volume))
+                )}
               </span>
               <span className="text-right tabular-nums text-muted-foreground">{formatPrice(position.avg_cost)}</span>
             </div>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional
 
@@ -79,7 +79,10 @@ class PositionOut(BaseModel):
     symbol: str
     volume: Decimal
     avg_cost: Decimal
+    available_volume: Decimal
+    pending_settlement_volume: Decimal
     frozen_volume: Decimal
+    last_buy_trade_date: Optional[date] = None
     updated_at: datetime
 
     model_config = {"from_attributes": True}

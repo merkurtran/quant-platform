@@ -337,7 +337,11 @@ status 值：`queued` / `running` / `success` / `failed`（错误 `20001` 404）
 
 side: `buy`/`sell`；order_type: `limit`/`market`；price 市价单为 null。
 
-A 股委托量必须为整数且是 100 股的倍数。未触价限价单保持 `submitted`，触价后由模拟撮合器成交；市价单按最新行情并计入账户滑点成交。
+A 股委托量必须为整数且是 100 股的倍数。模拟盘仅在交易所交易日的连续竞价时段撮合，并校验当日有效行情、前收盘价和板块涨跌幅限制。未触价限价单保持 `submitted`；涨停时的买单、跌停时的卖单保持排队，不会虚假成交。市价单按最新行情并计入账户滑点成交。
+
+模拟盘执行 T+1：当日买入计入 `pending_settlement_volume`，下一交易日才转入 `available_volume`。卖单只能冻结和卖出可卖持仓。
+
+历史回测的 Backtrader 成交填充器使用相同的板块涨跌幅与 T+1 约束；一字涨停买单和一字跌停卖单不会被计作成交。
 
 **响应 data：** `OrderOut`
 
@@ -374,7 +378,10 @@ status 流转：`pending → submitted → partial_filled → filled / cancelled
 **响应 data：** `PositionOut[]`
 
 ```json
-[{ "broker_account_id": 1, "symbol": "600519.SH", "volume": "100.00", "avg_cost": "1689.500", "updated_at": "..." }]
+[{ "broker_account_id": 1, "symbol": "600519.SH", "volume": "100.00",
+   "avg_cost": "1689.500", "available_volume": "0.00",
+   "pending_settlement_volume": "100.00", "frozen_volume": "0.00",
+   "last_buy_trade_date": "2026-07-16", "updated_at": "..." }]
 ```
 
 ---

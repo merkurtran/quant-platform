@@ -60,7 +60,7 @@ export default function PositionsPage() {
                       {formatVolume(p.volume)}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {formatVolume(String(Number(p.volume) - Number(p.frozen_volume)))}
+                      {formatVolume(String(Number(p.available_volume) - Number(p.frozen_volume)))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatPrice(p.avg_cost)}

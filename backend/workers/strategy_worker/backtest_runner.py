@@ -26,7 +26,7 @@ else:
 import backtrader as bt
 import pandas as pd
 import numpy as np
-from sqlalchemy import select, and_
+from sqlalchemy import func
 
 from .code_analyzer import analyze_code_security, CodeSecurityError
 from .sandbox import build_restricted_globals
@@ -34,6 +34,7 @@ from shared.strategy_sdk.base_strategy import BaseStrategy
 from shared.db.session import SessionLocal 
 from app.models.market import Klines
 from app.services.market_service import get_klines_with_adjustment, AdjustMethod 
+from app.services.a_share_trading_rules import AShareBacktestFiller
 
 logger = logging.getLogger(__name__)
 
@@ -335,6 +336,18 @@ def _load_kline_data(symbol: str, start_date: str, end_date: str) -> pd.DataFram
         } for k in kline_dicts])
         
         df.set_index('datetime', inplace=True)
+        listed_sessions_before_start = (
+            db.query(func.count())
+            .select_from(Klines)
+            .filter(
+                Klines.symbol == symbol,
+                Klines.period == '1d',
+                Klines.ts < kline_dicts[0]['ts'],
+            )
+            .scalar()
+            or 0
+        )
+        df.attrs['listed_sessions_before_start'] = listed_sessions_before_start
         
         logger.info(
             f"加载 {symbol} 日线数据(前复权): {len(df)} 条, "
@@ -577,6 +590,12 @@ def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
             # 配置经纪人
             cerebro.broker.setcash(float(config.initial_capital))
             cerebro.broker.setcommission(commission=config.commission)
+            cerebro.broker.set_filler(
+                AShareBacktestFiller(
+                    config.symbol,
+                    int(df.attrs.get('listed_sessions_before_start', 0)),
+                )
+            )
             if config.slippage:
                 cerebro.broker.set_slippage_perc(config.slippage)
             

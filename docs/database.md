@@ -251,7 +251,10 @@
 | symbol | String(16) | NOT NULL | — |
 | volume | Numeric(18,2) | NOT NULL | 持仓量 |
 | avg_cost | Numeric(12,3) | NOT NULL | 平均成本 |
+| available_volume | Numeric(18,2) | NOT NULL, default 0 | 已交收、当前可卖数量 |
+| pending_settlement_volume | Numeric(18,2) | NOT NULL, default 0 | 当日买入、等待下一交易日交收数量 |
 | frozen_volume | Numeric(18,2) | NOT NULL, default 0 | 未成交卖单冻结量 |
+| last_buy_trade_date | Date | NULL | 最近一次买入成交的交易日 |
 | updated_at | DateTime(tz) | NOT NULL | 自动更新 |
 
 **唯一约束：** `(broker_account_id, symbol)`

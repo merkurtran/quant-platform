@@ -212,7 +212,10 @@ export interface Position {
   symbol: string;
   volume: string;
   avg_cost: string;
+  available_volume: string;
+  pending_settlement_volume: string;
   frozen_volume: string;
+  last_buy_trade_date: string | null;
   updated_at: string;
 }
 
