@@ -213,6 +213,17 @@ uv run python -c "from app.main import app; print('OK')"
 | `XXX is not defined` | API 文件用了但没 import | 补 import |
 | `Could not locate SQLAlchemy Core type` | `mapped_column(type_=None)` | 改成正确的 SQL 类型（如 `JSONB`） |
 
+### Pylance 提示 `reportMissingImports`
+
+项目根目录的 `pyrightconfig.json` 已指向 `backend/.venv`。先执行：
+
+```bash
+cd backend
+uv sync --frozen
+```
+
+然后在 VS Code 执行 `Python: Select Interpreter`，选择 `backend/.venv` 中的 Python，并执行 `Developer: Reload Window`。不要选系统 Python 或 Conda base 环境。
+
 ---
 
 ## 场景 6：前端 `pnpm dev` 报 ignored builds
@@ -256,20 +267,22 @@ pnpm install > /dev/null 2>&1; echo $?
 
 ### 推荐：一键部署启动
 
-根目录 `Makefile` 会启动 PostgreSQL/Redis、执行迁移和构建，并拉起 API、market_worker、strategy_worker、trade_executor、前端五个进程。部署主机需提供 POSIX shell、GNU Make、Docker、uv、Node.js 和 pnpm。
+推荐使用完整 Docker Compose 部署。服务器只需 Docker Compose 和可选的 GNU Make，不需单独安装 Python、uv、Node.js 或 pnpm。
 
 ```bash
-cp .env.docker.example .env.docker
+cp .env.docker.sample .env.docker
 cp backend/.env.example backend/.env
-make deploy
-make status
+make docker-deploy
+make docker-status
 ```
 
-默认前端端口为 `3000`、API 为 `8000`。端口被占用时可覆盖：
+默认前端端口为 `3000`、API 为 `8000`，并仅绑定 `127.0.0.1`。端口被占用时修改 `.env.docker` 的 `FRONTEND_PORT` / `API_PORT`。没有 Make 时直接执行：
 
 ```bash
-make start FRONTEND_PORT=3002 API_PORT=8000
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.deploy.yml up -d --build
 ```
+
+完整 Linux 服务器部署、systemd、Nginx、HTTPS、备份和升级流程见 [`deployment-linux.md`](deployment-linux.md)。
 
 ### 手动开发启动
 
@@ -280,7 +293,7 @@ make start FRONTEND_PORT=3002 API_PORT=8000
 
 # 1. 启动 PostgreSQL + Redis
 cd quant-platform
-cp .env.docker.example .env.docker  # 填入 DB 密码等
+cp .env.docker.sample .env.docker  # 填入 DB 密码等
 docker compose --env-file .env.docker up -d
 
 # 2. 配置后端环境
@@ -303,7 +316,7 @@ uv run python workers/trade_executor/adapters/main.py
 ### 前端
 
 ```bash
-# 前提：已安装 Node.js 18+、pnpm
+# 前提：已安装 Node.js 20.9+、pnpm
 
 cd frontend
 pnpm install

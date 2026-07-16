@@ -4,6 +4,7 @@
 劣势：需要 TCP 连接 TDX 服务器，不支持除权除息。
 """
 import logging
+import os
 from datetime import date
 
 import pandas as pd
@@ -34,7 +35,18 @@ _PREFIX_MAP = {
     "3": (0, "SZ"),
     "8": (2, "BJ"),
     "4": (2, "BJ"),
+    "9": (2, "BJ"),
 }
+
+
+def _a_share_suffix(code: str) -> str | None:
+    if len(code) != 6 or not code.isdigit():
+        return None
+    if code.startswith(("000", "001", "002", "003", "300", "301")):
+        return "SZ"
+    if code.startswith(("600", "601", "603", "605", "688", "689")):
+        return "SH"
+    return None
 
 
 class MootdxProvider(MarketDataProvider):
@@ -43,7 +55,17 @@ class MootdxProvider(MarketDataProvider):
     def __init__(self):
         try:
             from mootdx.quotes import Quotes
-            self._client = Quotes.factory(market="std")
+            configured_server = os.getenv("MOOTDX_SERVER", "").strip()
+            if configured_server:
+                host, separator, port = configured_server.rpartition(":")
+                if not separator or not host or not port.isdigit():
+                    raise ValueError("MOOTDX_SERVER must use host:port format")
+                self._client = Quotes.factory(
+                    market="std",
+                    server=(host, int(port)),
+                )
+            else:
+                self._client = Quotes.factory(market="std")
         except Exception as e:
             raise DataSourceConnectionError(f"Failed to init mootdx: {e}") from e
 
@@ -109,7 +131,7 @@ class MootdxProvider(MarketDataProvider):
     def get_all_symbols(self) -> list[str]:
         """获取全市场 A 股代码列表（带交易所后缀）"""
         result = []
-        for market in [0, 1, 2]:  # 0=SZ, 1=SH, 2=BJ
+        for market in [0, 1]:  # mootdx standard quotes only expose SZ and SH
             try:
                 df = self._client.stocks(market=market)
             except Exception as e:
@@ -123,7 +145,7 @@ class MootdxProvider(MarketDataProvider):
                 code = str(row.get("code", row.get("symbol", ""))).strip()
                 if not code or not code[0].isdigit():
                     continue
-                suffix = _PREFIX_MAP.get(code[0], (None, None))[1]
+                suffix = _a_share_suffix(code)
                 if suffix is None:
                     continue
                 result.append(f"{code}.{suffix}")

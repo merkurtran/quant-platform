@@ -107,6 +107,10 @@ export default function MarketPage() {
       ),
     [watchlists]
   );
+  const realtimeSymbols = useMemo(
+    () => Array.from(new Set([...(symbol ? [symbol] : []), ...watchlistSymbols])),
+    [symbol, watchlistSymbols]
+  );
 
   const { data: quoteSnapshots } = useQuery({
     queryKey: ["quote-snapshots", watchlistSymbols],
@@ -147,8 +151,8 @@ export default function MarketPage() {
   });
 
   useEffect(() => {
-    if (watchlistSymbols.length) subscribe(watchlistSymbols);
-  }, [watchlistSymbols, subscribe]);
+    if (realtimeSymbols.length) subscribe(realtimeSymbols);
+  }, [realtimeSymbols, subscribe]);
 
   const selectSymbol = (sym: string) => {
     setBacktestResult(null);

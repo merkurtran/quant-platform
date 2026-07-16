@@ -8,6 +8,7 @@ from datetime import date
 
 from shared.market_data.base import MarketDataProvider
 from shared.market_data.exceptions import MarketDataError
+from shared.market_data.utils import normalize_symbol
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +48,24 @@ class FallbackProvider(MarketDataProvider):
         return self._try_chain("get_minute_kline", symbol, period, start_date=start_date)
 
     def get_all_symbols(self) -> list[str]:
-        return self._try_chain("get_all_symbols")
+        symbols: set[str] = set()
+        last_error = None
+        for provider in self._providers:
+            name = provider.__class__.__name__
+            try:
+                values = provider.get_all_symbols()
+                symbols.update(normalize_symbol(str(value)) for value in values)
+            except NotImplementedError:
+                logger.debug(f"{name}.get_all_symbols not implemented")
+            except Exception as exc:
+                last_error = exc
+                logger.warning(f"{name}.get_all_symbols failed: {exc}")
+
+        if symbols:
+            return sorted(symbols)
+        if last_error:
+            raise last_error
+        return []
 
     def get_corporate_actions(self, symbol: str, start_date: date | None = None) -> list[dict]:
         return self._try_chain("get_corporate_actions", symbol, start_date=start_date)

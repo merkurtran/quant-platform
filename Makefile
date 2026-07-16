@@ -3,12 +3,15 @@ SHELL := /bin/sh
 
 API_PORT ?= 8000
 FRONTEND_PORT ?= 3000
+BIND_HOST ?= 127.0.0.1
 COMPOSE_ENV ?= .env.docker
+COMPOSE_DEPLOY_FILE ?= docker-compose.deploy.yml
+DEPLOY_COMPOSE = docker compose --env-file $(COMPOSE_ENV) -f docker-compose.yml -f $(COMPOSE_DEPLOY_FILE)
 RUN_DIR := .run
 LOG_DIR := $(RUN_DIR)/logs
 SERVICES := api market-worker strategy-worker trade-executor frontend
 
-.PHONY: install build migrate infra-up wait-infra infra-down start stop restart status logs deploy
+.PHONY: install build migrate infra-up wait-infra infra-down start stop restart status logs deploy docker-deploy docker-stop docker-down docker-status docker-logs
 
 install:
 	cd backend && uv sync --frozen
@@ -37,14 +40,29 @@ infra-down:
 start: migrate
 	@mkdir -p $(LOG_DIR)
 	@test -f frontend/.next/BUILD_ID || $(MAKE) build
-	@$(call start_service,api,cd backend && exec uv run uvicorn app.main:app --host 0.0.0.0 --port $(API_PORT))
+	@$(call start_service,api,cd backend && exec uv run uvicorn app.main:app --host $(BIND_HOST) --port $(API_PORT))
 	@$(call start_service,market-worker,cd backend && exec uv run python workers/market_worker/main.py)
 	@$(call start_service,strategy-worker,cd backend && exec uv run python workers/strategy_worker/scheduler.py)
 	@$(call start_service,trade-executor,cd backend && exec uv run python workers/trade_executor/adapters/main.py)
-	@$(call start_service,frontend,cd frontend && exec pnpm exec next start --hostname 0.0.0.0 --port $(FRONTEND_PORT))
+	@$(call start_service,frontend,cd frontend && exec pnpm exec next start --hostname $(BIND_HOST) --port $(FRONTEND_PORT))
 	@echo "Services started: frontend http://localhost:$(FRONTEND_PORT), API http://localhost:$(API_PORT)"
 
 deploy: install build start
+
+docker-deploy:
+	$(DEPLOY_COMPOSE) up -d --build --remove-orphans
+
+docker-stop:
+	$(DEPLOY_COMPOSE) stop
+
+docker-down:
+	$(DEPLOY_COMPOSE) down
+
+docker-status:
+	$(DEPLOY_COMPOSE) ps
+
+docker-logs:
+	$(DEPLOY_COMPOSE) logs -f --tail=100
 
 stop:
 	@for service in $(SERVICES); do \

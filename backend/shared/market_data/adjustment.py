@@ -19,12 +19,9 @@ def _get_theoretical_price(prev_close: Decimal, action: dict) -> Decimal | None:
     stock_ratio = _safe_decimal(action.get("stock_ratio", 0))
     rights_price = _safe_decimal(action.get("rights_price", 0))
     rights_ratio = _safe_decimal(action.get("rights_ratio", 0))
-    if rights_price > 0 and rights_ratio > 0:
-        theoretical = (prev_close + rights_price * rights_ratio) / (1 + rights_ratio)
-        return theoretical if theoretical > 0 else None
-
-    # 分红/送股/两者组合,统一走这一个公式,不需要关心 action_type 具体是哪个标签
-    theoretical = (prev_close - cash) / (1 + stock_ratio)
+    theoretical = (
+        prev_close - cash + rights_price * rights_ratio
+    ) / (1 + stock_ratio + rights_ratio)
     return theoretical if theoretical > 0 else None
 
 
@@ -34,18 +31,48 @@ def _build_action_factors(raw_klines: list[dict], corporate_actions: list[dict])
     因子 = prev_close / theoretical_price
     所有复权方式共用此函数, 区别在于后续怎么使用这些因子
     """
-    factors = []
+    grouped_actions: dict = {}
     for action in corporate_actions:
-        prev_close = _find_prev_close(raw_klines, action["ex_date"])
+        ex_date = action["ex_date"]
+        grouped = grouped_actions.setdefault(
+            ex_date,
+            {
+                "ex_date": ex_date,
+                "cash_per_share": Decimal("0"),
+                "stock_ratio": Decimal("0"),
+                "rights_ratio": Decimal("0"),
+                "rights_proceeds": Decimal("0"),
+            },
+        )
+        rights_ratio = _safe_decimal(action.get("rights_ratio", 0))
+        grouped["cash_per_share"] += _safe_decimal(action.get("cash_per_share", 0))
+        grouped["stock_ratio"] += _safe_decimal(action.get("stock_ratio", 0))
+        grouped["rights_ratio"] += rights_ratio
+        grouped["rights_proceeds"] += (
+            _safe_decimal(action.get("rights_price", 0)) * rights_ratio
+        )
+
+    factors = []
+    for ex_date, action in sorted(grouped_actions.items()):
+        prev_close = _find_prev_close(raw_klines, ex_date)
         if prev_close is None:
             continue
-            
-        theoretical = _get_theoretical_price(prev_close, action)
+
+        rights_ratio = action["rights_ratio"]
+        normalized_action = {
+            **action,
+            "rights_price": (
+                action["rights_proceeds"] / rights_ratio
+                if rights_ratio > 0
+                else Decimal("0")
+            ),
+        }
+        theoretical = _get_theoretical_price(prev_close, normalized_action)
         if theoretical is None or theoretical <= 0:
             continue
-            
+
         factor = prev_close / theoretical
-        factors.append((action["ex_date"], factor))
+        factors.append((ex_date, factor))
     
     return factors
 

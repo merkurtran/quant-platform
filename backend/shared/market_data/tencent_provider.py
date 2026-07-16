@@ -22,7 +22,7 @@ class TencentProvider(MarketDataProvider):
     """腾讯财经行情数据源"""
 
     # fqkline 接口（kline/get 已废弃）
-    _DAILY_URL = "https://web.ifzq.gtimg.cn/appstock/app/fqkline/get"
+    _DAILY_URL = "https://ifzq.gtimg.cn/appstock/app/fqkline/get"
     _MKLINE_URL = "https://ifzq.gtimg.cn/appstock/app/kline/mkline"
 
     _PERIOD_MAP = {

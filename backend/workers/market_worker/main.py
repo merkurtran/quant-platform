@@ -17,6 +17,7 @@ from workers.market_worker.fetcher import (
     get_all_a_share_symbols,
     sync_corporate_actions
 )
+from app.services.a_share_trading_rules import is_trading_day, shanghai_now
 
 setup_logging()
 logger = get_logger("market_worker")
@@ -28,12 +29,38 @@ _TRADING_SESSIONS = (
 )
 
 
-def _is_trading_time(dt: datetime) -> bool:
-    t = dt.time().replace(second=0, microsecond=0)
+def _shanghai_datetime(dt: datetime | None = None) -> datetime:
+    value = dt or shanghai_now()
+    if value.tzinfo is None:
+        return value.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
+    return value.astimezone(ZoneInfo("Asia/Shanghai"))
+
+
+def _is_trading_time(dt: datetime | None = None) -> bool:
+    local = _shanghai_datetime(dt)
+    if not is_trading_day(local.date()):
+        return False
+    t = local.time().replace(tzinfo=None, second=0, microsecond=0)
     return any(start <= t <= end for start, end in _TRADING_SESSIONS)
 
+
+def _prioritize_tracked_symbols(
+    symbols: list[str], tracked_symbols: list[str]
+) -> list[str]:
+    tracked_codes = {symbol.split(".")[0] for symbol in tracked_symbols}
+    return sorted(
+        symbols,
+        key=lambda symbol: symbol.split(".")[0] not in tracked_codes,
+    )
+
 def sync_daily_klines():
-    symbols = get_all_a_share_symbols()
+    if not is_trading_day(shanghai_now().date()):
+        logger.info("非交易日，跳过日线同步")
+        return
+    symbols = _prioritize_tracked_symbols(
+        get_all_a_share_symbols(),
+        get_minute_kline_symbols(),
+    )
     # 使用线程池并发拉取，限制最大并发数避免网络压力过大
     with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
         future_to_symbol = {executor.submit(fetch_daily_kline, symbol): symbol for symbol in symbols}
@@ -46,7 +73,7 @@ def sync_daily_klines():
 
 
 def sync_minute_klines_by_period(period: str, *, force: bool = False):
-    if not force and not _is_trading_time(datetime.now()):
+    if not force and not _is_trading_time():
         return
     symbols = get_minute_kline_symbols()
     # 使用线程池并发拉取分钟线
@@ -62,6 +89,9 @@ def sync_minute_klines_by_period(period: str, *, force: bool = False):
 
 def sync_close_minute_klines():
     """收盘后补拉一次，避免 15:00 时数据源尚未生成最后一根 K 线。"""
+    if not is_trading_day(shanghai_now().date()):
+        logger.info("非交易日，跳过收盘分钟线补拉")
+        return
     for period in ("1m", "5m", "15m"):
         sync_minute_klines_by_period(period, force=True)
 

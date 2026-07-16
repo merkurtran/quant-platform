@@ -309,7 +309,39 @@ def save_corporate_actions(db: Session, symbol: str, actions: list[dict]) -> Non
     注意：本函数不管理事务（不 commit），由调用方统一控制 session 生命周期。"""
     if not actions:
         return
-    rows = [{"symbol": symbol, **action} for action in actions]
+    grouped: dict[tuple[object, str], dict] = {}
+    rights_proceeds: dict[tuple[object, str], Decimal] = {}
+    for action in actions:
+        key = (action["ex_date"], action["action_type"])
+        row = grouped.setdefault(
+            key,
+            {
+                "symbol": symbol,
+                "ex_date": action["ex_date"],
+                "action_type": action["action_type"],
+                "cash_per_share": Decimal("0"),
+                "stock_ratio": Decimal("0"),
+                "rights_price": Decimal("0"),
+                "rights_ratio": Decimal("0"),
+            },
+        )
+        cash = Decimal(str(action.get("cash_per_share") or 0))
+        stock = Decimal(str(action.get("stock_ratio") or 0))
+        rights_price = Decimal(str(action.get("rights_price") or 0))
+        rights_ratio = Decimal(str(action.get("rights_ratio") or 0))
+        row["cash_per_share"] += cash
+        row["stock_ratio"] += stock
+        row["rights_ratio"] += rights_ratio
+        rights_proceeds[key] = rights_proceeds.get(key, Decimal("0")) + (
+            rights_price * rights_ratio
+        )
+
+    rows = []
+    for key in sorted(grouped, key=lambda item: (item[0], item[1])):
+        row = grouped[key]
+        if row["rights_ratio"]:
+            row["rights_price"] = rights_proceeds[key] / row["rights_ratio"]
+        rows.append(row)
     stmt = pg_insert(CorporateActions).values(rows)
     stmt = stmt.on_conflict_do_update(
         index_elements=["symbol", "ex_date", "action_type"],

@@ -8,7 +8,7 @@
   - _check_alerts 分钟线集成
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import patch, MagicMock
 
@@ -18,8 +18,11 @@ from workers.market_worker.fetcher import (
     normalize_symbol,
     get_alert_rule_symbols,
     get_minute_kline_symbols,
+    get_realtime_subscription_symbols,
     get_watchlist_symbols,
     _check_alerts,
+    _ensure_corporate_actions,
+    _normalize_kline_timestamp,
     _publish_quote,
 )
 
@@ -42,6 +45,9 @@ class TestNormalizeSymbol:
     def test_beijing_exchange(self):
         assert normalize_symbol("430047") == "430047.BJ"
 
+    def test_beijing_exchange_920_segment(self):
+        assert normalize_symbol("920001") == "920001.BJ"
+
     def test_keeps_canonical_symbol(self):
         assert normalize_symbol("600519.SH") == "600519.SH"
 
@@ -55,6 +61,27 @@ class TestNormalizeSymbol:
     def test_unknown_prefix_raises(self):
         with pytest.raises(ValueError, match="Unknown exchange"):
             normalize_symbol("900001")
+
+
+class TestNormalizeKlineTimestamp:
+
+    def test_intraday_naive_timestamp_is_shanghai_local_time(self):
+        result = _normalize_kline_timestamp(datetime(2026, 7, 16, 11, 30), "1m")
+
+        assert result == datetime(2026, 7, 16, 3, 30, tzinfo=timezone.utc)
+
+    def test_intraday_aware_timestamp_keeps_same_instant(self):
+        result = _normalize_kline_timestamp(
+            datetime(2026, 7, 16, 3, 30, tzinfo=timezone.utc),
+            "5m",
+        )
+
+        assert result == datetime(2026, 7, 16, 3, 30, tzinfo=timezone.utc)
+
+    def test_daily_timestamp_keeps_exchange_trade_date(self):
+        result = _normalize_kline_timestamp(datetime(2026, 7, 16), "1d")
+
+        assert result == datetime(2026, 7, 16, tzinfo=timezone.utc)
 
 
 # ══════════════════════════════════════════════════════════
@@ -107,43 +134,96 @@ class TestGetAlertRuleSymbols:
 
 class TestGetMinuteKlineSymbols:
 
+    @patch("workers.market_worker.fetcher.get_realtime_subscription_symbols")
     @patch("workers.market_worker.fetcher.get_alert_rule_symbols")
     @patch("workers.market_worker.fetcher.get_watchlist_symbols")
-    def test_union_of_watchlist_and_alerts(self, mock_watchlist, mock_alerts):
+    def test_union_of_watchlist_alerts_and_realtime(
+        self, mock_watchlist, mock_alerts, mock_realtime
+    ):
         mock_watchlist.return_value = ["600519", "000001"]
         mock_alerts.return_value = ["000001", "300750"]  # 000001 重叠
+        mock_realtime.return_value = ["002594"]
 
         result = get_minute_kline_symbols()
 
-        assert set(result) == {"600519", "000001", "300750"}
-        assert len(result) == 3  # 无重复
+        assert set(result) == {"600519", "000001", "300750", "002594"}
+        assert len(result) == 4  # 无重复
 
+    @patch("workers.market_worker.fetcher.get_realtime_subscription_symbols", return_value=[])
     @patch("workers.market_worker.fetcher.get_alert_rule_symbols")
     @patch("workers.market_worker.fetcher.get_watchlist_symbols")
-    def test_sorted_output(self, mock_watchlist, mock_alerts):
+    def test_sorted_output(self, mock_watchlist, mock_alerts, mock_realtime):
         mock_watchlist.return_value = ["300750", "600519"]
         mock_alerts.return_value = ["000001"]
 
         result = get_minute_kline_symbols()
         assert result == sorted(result)
 
+    @patch("workers.market_worker.fetcher.get_realtime_subscription_symbols", return_value=[])
     @patch("workers.market_worker.fetcher.get_alert_rule_symbols")
     @patch("workers.market_worker.fetcher.get_watchlist_symbols")
-    def test_watchlist_only_no_alerts(self, mock_watchlist, mock_alerts):
+    def test_watchlist_only_no_alerts(self, mock_watchlist, mock_alerts, mock_realtime):
         mock_watchlist.return_value = ["600519"]
         mock_alerts.return_value = []
 
         result = get_minute_kline_symbols()
         assert result == ["600519"]
 
+    @patch("workers.market_worker.fetcher.get_realtime_subscription_symbols", return_value=[])
     @patch("workers.market_worker.fetcher.get_alert_rule_symbols")
     @patch("workers.market_worker.fetcher.get_watchlist_symbols")
-    def test_alerts_only_no_watchlist(self, mock_watchlist, mock_alerts):
+    def test_alerts_only_no_watchlist(self, mock_watchlist, mock_alerts, mock_realtime):
         mock_watchlist.return_value = []
         mock_alerts.return_value = ["300750", "600519"]
 
         result = get_minute_kline_symbols()
         assert set(result) == {"300750", "600519"}
+
+
+class TestRealtimeSubscriptionSymbols:
+
+    @patch("workers.market_worker.fetcher.get_redis_client")
+    def test_reads_active_quote_pubsub_channels(self, mock_get_redis):
+        mock_get_redis.return_value.pubsub_channels.return_value = [
+            b"quotes:000001.SZ",
+            b"quotes:600519.SH",
+        ]
+
+        assert get_realtime_subscription_symbols() == ["000001", "600519"]
+
+
+class TestEnsureCorporateActions:
+
+    @patch("workers.market_worker.fetcher.sync_corporate_actions", return_value=True)
+    @patch("workers.market_worker.fetcher.get_redis_client")
+    def test_syncs_once_when_cache_marker_is_acquired(self, mock_get_redis, mock_sync):
+        mock_get_redis.return_value.set.return_value = True
+
+        _ensure_corporate_actions("600519.SH")
+
+        mock_sync.assert_called_once_with("600519.SH")
+        mock_get_redis.return_value.delete.assert_not_called()
+
+    @patch("workers.market_worker.fetcher.sync_corporate_actions", return_value=True)
+    @patch("workers.market_worker.fetcher.get_redis_client")
+    def test_skips_sync_when_marker_already_exists(self, mock_get_redis, mock_sync):
+        mock_get_redis.return_value.set.return_value = None
+
+        _ensure_corporate_actions("600519.SH")
+
+        mock_sync.assert_not_called()
+
+    @patch("workers.market_worker.fetcher.sync_corporate_actions", return_value=False)
+    @patch("workers.market_worker.fetcher.get_redis_client")
+    def test_failed_sync_removes_marker_for_retry(self, mock_get_redis, mock_sync):
+        mock_get_redis.return_value.set.return_value = True
+
+        _ensure_corporate_actions("600519.SH")
+
+        mock_sync.assert_called_once_with("600519.SH")
+        mock_get_redis.return_value.delete.assert_called_once_with(
+            "market:corporate_actions_checked:600519.SH"
+        )
 
 
 # ══════════════════════════════════════════════════════════

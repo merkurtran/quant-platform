@@ -75,7 +75,7 @@ docker compose --env-file .env.docker up -d  # PostgreSQL + Redis
 
 ## 前端
 
-- **框架**：Next.js 15（App Router）
+- **框架**：Next.js 16（App Router）
 - **语言**：TypeScript
 - **UI**：shadcn/ui + TailwindCSS
 - **包管理**：pnpm
@@ -93,13 +93,19 @@ pnpm dev
 Linux/WSL 部署环境可在项目根目录执行：
 
 ```bash
-cp .env.docker.example .env.docker
+cp .env.docker.sample .env.docker
 cp backend/.env.example backend/.env
-make deploy
-make status
+make docker-deploy
+make docker-status
 ```
 
-`Makefile` 会启动基础设施、迁移、API、三个 Worker 与生产前端。若 `3000` 已被占用，使用 `make start FRONTEND_PORT=3002`。
+`docker-deploy` 会构建前后端镜像，启动 PostgreSQL、Redis、迁移任务、API、三个 Worker 和生产前端。默认只监听 `127.0.0.1`；端口或域名在 `.env.docker` 中设置。Windows 没有 GNU Make 时可直接运行：
+
+```bash
+docker compose --env-file .env.docker -f docker-compose.yml -f docker-compose.deploy.yml up -d --build
+```
+
+完整的 Ubuntu/Linux、systemd、Nginx、HTTPS、备份、升级与故障排查说明见 [`docs/deployment-linux.md`](docs/deployment-linux.md)。
 
 ---
 

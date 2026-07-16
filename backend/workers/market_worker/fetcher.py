@@ -1,6 +1,7 @@
 import json
-from datetime import timedelta, datetime, timezone
+from datetime import timedelta, datetime, time, timezone
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
@@ -17,6 +18,8 @@ from app.core.config import get_settings
 logger = get_logger("market_worker.fetcher")
 settings = get_settings()
 provider = create_default_provider()
+SHANGHAI_TZ = ZoneInfo("Asia/Shanghai")
+CORPORATE_ACTION_CHECK_TTL_SECONDS = 7 * 24 * 60 * 60
 
 # A 股交易所前缀映射表（首位数字 → 交易所后缀）
 # 扩展新交易所只需在此处添加一行
@@ -26,6 +29,7 @@ EXCHANGE_PREFIX_MAP: dict[str, str] = {
     "3": "SZ",   # 创业板
     "4": "BJ",   # 北交所
     "8": "BJ",   # 北交所（两网/退市）
+    "9": "BJ",   # 北交所 920 代码段
 }
 
 
@@ -37,6 +41,8 @@ def normalize_symbol(raw_symbol: str) -> str:
         raise ValueError(f"Invalid A-share code (expected digits): {raw_symbol!r}")
     prefix = code[0]
     suffix = EXCHANGE_PREFIX_MAP.get(prefix)
+    if prefix == "9" and not code.startswith("920"):
+        suffix = None
     if suffix is None:
         raise ValueError(f"Unknown exchange for symbol {raw_symbol!r}: prefix '{prefix}' not in {list(EXCHANGE_PREFIX_MAP.keys())}")
     if supplied_suffix and supplied_suffix != suffix:
@@ -44,6 +50,30 @@ def normalize_symbol(raw_symbol: str) -> str:
             f"Invalid exchange suffix for {raw_symbol!r}: expected {suffix}"
         )
     return f"{code}.{suffix}"
+
+
+def _normalize_kline_timestamp(value, period: str) -> datetime:
+    if hasattr(value, "to_pydatetime"):
+        value = value.to_pydatetime()
+    elif isinstance(value, str):
+        value = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if not isinstance(value, datetime):
+        raise ValueError(f"Invalid kline timestamp: {value!r}")
+
+    if period == "1d":
+        local_date = (
+            value.astimezone(SHANGHAI_TZ).date()
+            if value.tzinfo is not None
+            else value.date()
+        )
+        return datetime.combine(local_date, time.min, tzinfo=timezone.utc)
+
+    local = (
+        value.replace(tzinfo=SHANGHAI_TZ)
+        if value.tzinfo is None
+        else value.astimezone(SHANGHAI_TZ)
+    )
+    return local.astimezone(timezone.utc)
 
 
 def _save_klines(rows: list[dict]) -> None:
@@ -56,6 +86,8 @@ def _save_klines(rows: list[dict]) -> None:
     """
     if not rows:
         return
+    for row in rows:
+        row["ts"] = _normalize_kline_timestamp(row["ts"], row["period"])
     db = SessionLocal()
     try:
         stmt = pg_insert(Klines).values(rows)
@@ -200,6 +232,7 @@ def fetch_minute_kline(symbol: str, period: str) -> None:
     拉取范围由 get_minute_kline_symbols() 决定: 自选股 + 带活跃预警规则的股票
     """
     normalized_symbol = normalize_symbol(symbol)
+    _ensure_corporate_actions(normalized_symbol)
 
     db = SessionLocal()
     try:
@@ -217,10 +250,10 @@ def fetch_minute_kline(symbol: str, period: str) -> None:
 
     if latest:
         step_minutes = _PERIOD_MINUTES.get(period, 1)
-        start_dt = latest[0] + timedelta(minutes=step_minutes)
+        start_dt = latest[0].astimezone(SHANGHAI_TZ) + timedelta(minutes=step_minutes)
     else:
         # 首次拉取回溯 7 天（覆盖完整交易周，避免跨周末数据缺失）
-        start_dt = datetime.now(timezone.utc).astimezone() - timedelta(days=7)
+        start_dt = datetime.now(SHANGHAI_TZ) - timedelta(days=7)
     start_date = start_dt.strftime("%Y-%m-%d %H:%M:%S")
 
     try:
@@ -265,11 +298,29 @@ def get_alert_rule_symbols() -> list[str]:
         db.close()
 
 
+def get_realtime_subscription_symbols() -> list[str]:
+    """Return symbols currently watched by connected WebSocket clients."""
+    try:
+        channels = get_redis_client().pubsub_channels("quotes:*")
+    except Exception as exc:
+        logger.warning(f"查询实时行情订阅失败: {exc}")
+        return []
+
+    symbols = []
+    for channel in channels:
+        value = channel.decode() if isinstance(channel, bytes) else str(channel)
+        _, separator, symbol = value.partition("quotes:")
+        if separator and symbol:
+            symbols.append(symbol.split(".")[0])
+    return sorted(set(symbols))
+
+
 def get_minute_kline_symbols() -> list[str]:
-    """分钟线拉取范围：自选股 + 带活跃预警规则的股票,去重"""
+    """分钟线拉取范围：自选股、活跃预警和在线查看标的。"""
     watchlist = set(get_watchlist_symbols())
     alert_symbols = set(get_alert_rule_symbols())
-    return sorted(watchlist | alert_symbols)
+    realtime_symbols = set(get_realtime_subscription_symbols())
+    return sorted(watchlist | alert_symbols | realtime_symbols)
 
 
 def get_all_a_share_symbols() -> list[str]:
@@ -277,17 +328,17 @@ def get_all_a_share_symbols() -> list[str]:
     return provider.get_all_symbols()
 
 
-def sync_corporate_actions(symbol: str) -> None:
+def sync_corporate_actions(symbol: str) -> bool:
     """拉取并保存一支股票的除权除息记录"""
     normalized_symbol = normalize_symbol(symbol)
     try:
         actions = provider.get_corporate_actions(normalized_symbol)
     except MarketDataError as e:
         logger.error(f"除权除息数据拉取失败 {symbol}: {e}")
-        return
+        return False
     
     if not actions:
-        return
+        return True
 
     db = SessionLocal()
     try:
@@ -295,3 +346,31 @@ def sync_corporate_actions(symbol: str) -> None:
         db.commit()
     finally:
         db.close()
+    return True
+
+
+def _ensure_corporate_actions(symbol: str) -> None:
+    """Prepare adjustment data once a week for actively tracked symbols."""
+    normalized_symbol = normalize_symbol(symbol)
+    cache_key = f"market:corporate_actions_checked:{normalized_symbol}"
+    redis_client = get_redis_client()
+    try:
+        acquired = redis_client.set(
+            cache_key,
+            "1",
+            ex=CORPORATE_ACTION_CHECK_TTL_SECONDS,
+            nx=True,
+        )
+    except Exception as exc:
+        logger.warning(f"复权数据缓存检查失败 {normalized_symbol}: {exc}")
+        return
+
+    if not acquired:
+        return
+
+    try:
+        if not sync_corporate_actions(normalized_symbol):
+            redis_client.delete(cache_key)
+    except Exception as exc:
+        redis_client.delete(cache_key)
+        logger.error(f"复权数据初始化失败 {normalized_symbol}: {exc}")

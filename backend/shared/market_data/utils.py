@@ -30,13 +30,18 @@ _EXCHANGE_PREFIX_MAP: dict[str, str] = {
     "3": "SZ",
     "4": "BJ",
     "8": "BJ",
+    "9": "BJ",
 }
 
 
 def normalize_symbol(raw_code: str) -> str:
     """把纯数字代码转成带交易所后缀格式，如 600519 -> 600519.SH"""
     if "." in raw_code:
-        return raw_code
+        return raw_code.upper()
     prefix = raw_code[0] if raw_code else ""
-    suffix = _EXCHANGE_PREFIX_MAP.get(prefix, "SH")
+    suffix = _EXCHANGE_PREFIX_MAP.get(prefix)
+    if prefix == "9" and not raw_code.startswith("920"):
+        suffix = None
+    if suffix is None:
+        raise ValueError(f"Unknown exchange prefix for symbol {raw_code!r}")
     return f"{raw_code}.{suffix}"
