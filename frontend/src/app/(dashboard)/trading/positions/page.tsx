@@ -45,6 +45,7 @@ export default function PositionsPage() {
                 <TableRow>
                   <TableHead>代码</TableHead>
                   <TableHead className="text-right">持仓量</TableHead>
+                  <TableHead className="text-right">可用量</TableHead>
                   <TableHead className="text-right">平均成本</TableHead>
                   <TableHead>更新时间</TableHead>
                 </TableRow>
@@ -57,6 +58,9 @@ export default function PositionsPage() {
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatVolume(p.volume)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatVolume(String(Number(p.volume) - Number(p.frozen_volume)))}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatPrice(p.avg_cost)}

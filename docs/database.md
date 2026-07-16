@@ -205,6 +205,13 @@
 | account_alias | String(64) | NOT NULL | 账户别名 |
 | credentials_encrypted | String | NULL | Fernet 加密的凭证 |
 | status | String(16) | NOT NULL, default `inactive` | `active` / `inactive` |
+| initial_cash | Numeric(18,2) | NOT NULL | 模拟账户初始资金 |
+| cash_balance | Numeric(18,2) | NOT NULL | 当前可用资金 |
+| frozen_cash | Numeric(18,2) | NOT NULL | 未成交买单冻结资金 |
+| commission_rate | Numeric(10,6) | NOT NULL | 券商佣金率 |
+| minimum_commission | Numeric(10,2) | NOT NULL | 单笔最低佣金 |
+| stamp_duty_rate | Numeric(10,6) | NOT NULL | 卖出印花税率 |
+| slippage_rate | Numeric(10,6) | NOT NULL | 市价单滑点率 |
 | created_at | DateTime(tz) | NOT NULL | — |
 
 ### orders
@@ -222,6 +229,12 @@
 | price | Numeric(12,3) | NULL | 限价单价格 |
 | volume | Numeric(18,2) | NOT NULL | 委托量 |
 | filled_volume | Numeric(18,2) | NOT NULL, default 0 | 已成交量 |
+| filled_price | Numeric(12,3) | NULL | 实际成交价 |
+| commission | Numeric(12,2) | NOT NULL, default 0 | 佣金 |
+| stamp_duty | Numeric(12,2) | NOT NULL, default 0 | 卖出印花税 |
+| reject_reason | String(255) | NULL | 拒单原因 |
+| reserved_cash | Numeric(18,2) | NOT NULL, default 0 | 本订单冻结资金 |
+| reserved_volume | Numeric(18,2) | NOT NULL, default 0 | 本订单冻结持仓量 |
 | status | String(16) | NOT NULL, default `pending` | `pending/submitted/partial_filled/filled/cancelled/rejected` |
 | broker_order_id | String(64) | NULL | 券商返回的订单 ID |
 | origin | String(16) | NOT NULL, default `manual` | `manual` / `strategy` / `ai_agent` |
@@ -238,6 +251,7 @@
 | symbol | String(16) | NOT NULL | — |
 | volume | Numeric(18,2) | NOT NULL | 持仓量 |
 | avg_cost | Numeric(12,3) | NOT NULL | 平均成本 |
+| frozen_volume | Numeric(18,2) | NOT NULL, default 0 | 未成交卖单冻结量 |
 | updated_at | DateTime(tz) | NOT NULL | 自动更新 |
 
 **唯一约束：** `(broker_account_id, symbol)`

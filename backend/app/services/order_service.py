@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.exceptions import BizException, BizErrorCode
-from app.models.trading import AuditLog, BrokerAccount, Order, Position
+from app.models.trading import AuditLog, BrokerAccount, Order, Position, TradeOutbox
 from shared.redis_client import get_async_redis_client
 
 
@@ -83,7 +83,11 @@ async def create_order(
 
 
 async def cancel_order(session: AsyncSession, user_id: int, order_id: int) -> Order | None:
-    stmt = select(Order).where(Order.id == order_id, Order.user_id == user_id)
+    stmt = (
+        select(Order)
+        .where(Order.id == order_id, Order.user_id == user_id)
+        .with_for_update()
+    )
     result = await session.execute(stmt)
     order = result.scalar_one_or_none()
 
@@ -93,8 +97,55 @@ async def cancel_order(session: AsyncSession, user_id: int, order_id: int) -> Or
     if order.status not in ("pending", "submitted", "partial_filled"):
         raise BizException(BizErrorCode.ORDER_CANNOT_CANCEL, "Order cannot be cancelled", status_code=400)
 
+    outbox_result = await session.execute(
+        select(TradeOutbox)
+        .where(TradeOutbox.order_id == order.id, TradeOutbox.status == "pending")
+        .with_for_update()
+    )
+    outbox = outbox_result.scalar_one_or_none()
+    if outbox is not None:
+        outbox.status = "skipped"
+        outbox.processed_at = datetime.now(timezone.utc)
+        outbox.last_error = "Cancelled by user before execution"
+
+    if order.reserved_cash > 0:
+        account_result = await session.execute(
+            select(BrokerAccount)
+            .where(BrokerAccount.id == order.broker_account_id)
+            .with_for_update()
+        )
+        account = account_result.scalar_one()
+        account.frozen_cash -= order.reserved_cash
+        account.cash_balance += order.reserved_cash
+        order.reserved_cash = 0
+
+    if order.reserved_volume > 0:
+        position_result = await session.execute(
+            select(Position)
+            .where(
+                Position.broker_account_id == order.broker_account_id,
+                Position.symbol == order.symbol,
+            )
+            .with_for_update()
+        )
+        position = position_result.scalar_one_or_none()
+        if position is not None:
+            position.frozen_volume -= order.reserved_volume
+        order.reserved_volume = 0
+
+    previous_status = order.status
     order.status = "cancelled"
     order.updated_at = datetime.now(timezone.utc)
+    session.add(
+        AuditLog(
+            user_id=user_id,
+            action="order_cancel",
+            actor_type="manual",
+            target_type="order",
+            target_id=order.id,
+            detail={"previous_status": previous_status},
+        )
+    )
     await session.commit()
     await session.refresh(order)
     return order

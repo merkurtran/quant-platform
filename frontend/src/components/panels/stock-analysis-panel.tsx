@@ -100,6 +100,17 @@ export function StockAnalysisPanel({ symbol, stockName }: StockAnalysisPanelProp
             <Loader2 className="h-4 w-4 animate-spin" />
             正在核验事件影响
           </div>
+        ) : analysisMutation.isError ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 px-5 text-center">
+            <p className="text-xs leading-5 text-muted-foreground">
+              {analysisMutation.error instanceof Error
+                ? analysisMutation.error.message
+                : "事件分析暂时不可用"}
+            </p>
+            <Button size="sm" variant="outline" onClick={() => analysisMutation.reset()}>
+              返回事件列表
+            </Button>
+          </div>
         ) : activeAnalysis ? (
           <StockAnalysisContent analysis={activeAnalysis} />
         ) : eventsQuery.data?.events.length ? (

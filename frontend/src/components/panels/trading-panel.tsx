@@ -98,7 +98,13 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
                 <p>{order.price ? formatPrice(order.price) : "市价"}</p>
                 <p className="text-muted-foreground">{formatVolume(order.volume)}</p>
               </div>
-              <Badge variant="secondary" className="justify-center text-[10px]">{ORDER_STATUS_LABELS[order.status] ?? order.status}</Badge>
+              <Badge
+                variant="secondary"
+                className="justify-center text-[10px]"
+                title={order.reject_reason ?? undefined}
+              >
+                {ORDER_STATUS_LABELS[order.status] ?? order.status}
+              </Badge>
               {CANCELLABLE_STATUSES.includes(order.status) ? (
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setCancelId(order.id)} title="撤单"><Ban className="h-3.5 w-3.5 text-danger" /></Button>
               ) : <span />}
@@ -110,7 +116,12 @@ export function TradingPanel({ symbol }: TradingPanelProps) {
           {positionsLoading ? <PanelLoading /> : positions.length ? positions.map((position) => (
             <div key={`${position.broker_account_id}-${position.symbol}`} className="grid grid-cols-[minmax(0,1fr)_72px_72px] gap-2 border-b border-border/60 px-2 py-2 text-xs">
               <span className="truncate font-medium tabular-nums">{position.symbol}</span>
-              <span className="text-right tabular-nums">{formatVolume(position.volume)}</span>
+              <span
+                className="text-right tabular-nums"
+                title={Number(position.frozen_volume) > 0 ? `冻结 ${formatVolume(position.frozen_volume)}` : undefined}
+              >
+                {formatVolume(String(Number(position.volume) - Number(position.frozen_volume)))}
+              </span>
               <span className="text-right tabular-nums text-muted-foreground">{formatPrice(position.avg_cost)}</span>
             </div>
           )) : <PanelEmpty icon={<Wallet className="h-7 w-7" />} text="暂无持仓" />}

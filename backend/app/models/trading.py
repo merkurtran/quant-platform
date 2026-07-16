@@ -34,6 +34,7 @@ class BrokerAccount(Base):
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="inactive")
     initial_cash: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=1000000)
     cash_balance: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=1000000)
+    frozen_cash: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     commission_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0.0003"))
     minimum_commission: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False, default=5)
     stamp_duty_rate: Mapped[Decimal] = mapped_column(Numeric(10, 6), nullable=False, default=Decimal("0.0005"))
@@ -58,6 +59,9 @@ class Order(Base, TimestampMixin):
     filled_price: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 3), nullable=True)
     commission: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
     stamp_duty: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False, default=0)
+    reject_reason: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    reserved_cash: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
+    reserved_volume: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     # pending(已写库未提交) -> submitted(已提交券商)-> partial_filled(部分成交) -> filled(完全成交) -> cancelled(已撤) / rejected(被拒)
     # MockAdapter 下单是同步立即成交(pending 直接到 filled);
     # 真实券商是异步的,submitted 后需靠轮询或回调推进状态,中间可能停留数秒到数分钟
@@ -76,6 +80,7 @@ class Position(Base):
     symbol: Mapped[str] = mapped_column(String(16), nullable=False)
     volume: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)
     avg_cost: Mapped[Decimal] = mapped_column(Numeric(12, 3), nullable=False)
+    frozen_volume: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     __table_args__ = (UniqueConstraint("broker_account_id", "symbol"),)

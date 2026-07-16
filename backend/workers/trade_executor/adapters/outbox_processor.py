@@ -126,19 +126,30 @@ async def _dispatch_one(
             adapter.connect({})
 
             req_json = outbox.request_json
-            execution_price = (
+            limit_price = (
                 Decimal(str(req_json["price"])) if req_json.get("price") else None
             )
-            if execution_price is None:
-                from app.models.market import Klines
+            from app.models.market import Klines
 
-                price_result = await session.execute(
-                    select(Klines.close)
-                    .where(Klines.symbol == order.symbol)
-                    .order_by(Klines.ts.desc())
-                    .limit(1)
+            price_result = await session.execute(
+                select(Klines.close)
+                .where(Klines.symbol == order.symbol)
+                .order_by(Klines.ts.desc())
+                .limit(1)
+            )
+            market_price = price_result.scalar_one_or_none()
+
+            if req_json["order_type"] == "limit":
+                marketable = market_price is not None and limit_price is not None and (
+                    (order.side == "buy" and market_price <= limit_price)
+                    or (order.side == "sell" and market_price >= limit_price)
                 )
-                market_price = price_result.scalar_one_or_none()
+                if not marketable:
+                    adapter.disconnect()
+                    return
+                execution_price = market_price
+            else:
+                execution_price = None
                 if market_price is not None:
                     slippage = account.slippage_rate or Decimal("0")
                     direction = Decimal("1") if order.side == "buy" else Decimal("-1")
@@ -188,6 +199,7 @@ async def _dispatch_one(
             elif (
                 account.broker_type == "mock"
                 and order.side == "buy"
+                and order.reserved_cash == 0
                 and account.cash_balance < estimated_gross + estimated_commission
             ):
                 broker_result = OrderResult(
@@ -197,6 +209,15 @@ async def _dispatch_one(
                 )
             else:
                 broker_result = adapter.place_order(request)
+
+            if account.broker_type == "mock" and broker_result.status == "rejected":
+                if order.reserved_cash > 0:
+                    account.frozen_cash -= order.reserved_cash
+                    account.cash_balance += order.reserved_cash
+                    order.reserved_cash = 0
+                if order.reserved_volume > 0 and pos is not None:
+                    pos.frozen_volume -= order.reserved_volume
+                    order.reserved_volume = 0
 
             # 状态流转校验
             allowed_next = STATUS_TRANSITIONS.get(order.status, set())
@@ -209,6 +230,7 @@ async def _dispatch_one(
             now = datetime.now(timezone.utc)
             order.status = broker_result.status
             order.broker_order_id = broker_result.broker_order_id
+            order.reject_reason = broker_result.message if broker_result.status == "rejected" else None
             order.updated_at = now
 
             previous_filled = order.filled_volume or Decimal("0")
@@ -257,10 +279,19 @@ async def _dispatch_one(
                         session.add(pos)
                 elif order.side == "sell" and pos is not None:
                     pos.volume -= filled_delta
+                    pos.frozen_volume -= min(pos.frozen_volume, filled_delta)
+                    order.reserved_volume -= min(order.reserved_volume, filled_delta)
 
                 if account.broker_type == "mock":
                     if order.side == "buy":
-                        account.cash_balance -= fill_gross + fill_commission
+                        actual_debit = fill_gross + fill_commission
+                        reserved_cash = order.reserved_cash
+                        account.frozen_cash -= reserved_cash
+                        if reserved_cash >= actual_debit:
+                            account.cash_balance += reserved_cash - actual_debit
+                        else:
+                            account.cash_balance -= actual_debit - reserved_cash
+                        order.reserved_cash = 0
                     else:
                         account.cash_balance += (
                             fill_gross - fill_commission - fill_stamp_duty

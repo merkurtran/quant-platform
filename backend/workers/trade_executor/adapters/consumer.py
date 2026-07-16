@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import redis.asyncio as aioredis
 from sqlalchemy import select
@@ -67,9 +68,13 @@ async def _process_order(
 
     async with db_session_factory() as session:
         # 获取 broker_account
-        from app.models.trading import BrokerAccount, Order
+        from app.models.trading import AuditLog, BrokerAccount, Order, Position
 
-        stmt = select(BrokerAccount).where(BrokerAccount.id == broker_account_id)
+        stmt = (
+            select(BrokerAccount)
+            .where(BrokerAccount.id == broker_account_id)
+            .with_for_update()
+        )
         result = await session.execute(stmt)
         account = result.scalar_one_or_none()
 
@@ -80,9 +85,13 @@ async def _process_order(
             return
 
         # 获取订单记录（幂等检查）
-        stmt = select(Order).where(
-            Order.broker_account_id == broker_account_id,
-            Order.client_order_id == client_order_id,
+        stmt = (
+            select(Order)
+            .where(
+                Order.broker_account_id == broker_account_id,
+                Order.client_order_id == client_order_id,
+            )
+            .with_for_update()
         )
         result = await session.execute(stmt)
         order = result.scalar_one_or_none()
@@ -94,6 +103,78 @@ async def _process_order(
         if order.status not in ("pending",):
             logger.warning(f"Order {client_order_id} already processed, status={order.status}")
             return
+
+        if account.broker_type == "mock":
+            estimated_price = order.price
+            if estimated_price is None:
+                from app.models.market import Klines
+
+                price_result = await session.execute(
+                    select(Klines.close)
+                    .where(Klines.symbol == order.symbol)
+                    .order_by(Klines.ts.desc())
+                    .limit(1)
+                )
+                market_price = price_result.scalar_one_or_none()
+                if market_price is not None:
+                    direction = Decimal("1") if order.side == "buy" else Decimal("-1")
+                    estimated_price = market_price * (
+                        Decimal("1") + direction * account.slippage_rate
+                    )
+
+            rejection_reason = None
+            if estimated_price is None:
+                rejection_reason = "No market price available"
+            elif order.side == "buy":
+                gross = estimated_price * order.volume
+                commission = max(
+                    gross * account.commission_rate,
+                    account.minimum_commission,
+                ).quantize(Decimal("0.01"))
+                reserve = (gross + commission).quantize(Decimal("0.01"))
+                if account.cash_balance < reserve:
+                    rejection_reason = "Insufficient cash"
+                else:
+                    account.cash_balance -= reserve
+                    account.frozen_cash += reserve
+                    order.reserved_cash = reserve
+            else:
+                pos_result = await session.execute(
+                    select(Position)
+                    .where(
+                        Position.broker_account_id == broker_account_id,
+                        Position.symbol == order.symbol,
+                    )
+                    .with_for_update()
+                )
+                position = pos_result.scalar_one_or_none()
+                available_volume = (
+                    position.volume - position.frozen_volume
+                    if position is not None
+                    else Decimal("0")
+                )
+                if available_volume < order.volume:
+                    rejection_reason = "Insufficient position"
+                else:
+                    position.frozen_volume += order.volume
+                    order.reserved_volume = order.volume
+
+            if rejection_reason is not None:
+                order.status = "rejected"
+                order.reject_reason = rejection_reason
+                order.updated_at = datetime.now(timezone.utc)
+                session.add(
+                    AuditLog(
+                        user_id=user_id,
+                        action="order_rejected",
+                        actor_type="system",
+                        target_type="order",
+                        target_id=order.id,
+                        detail={"reason": rejection_reason},
+                    )
+                )
+                await session.commit()
+                return
 
         # ── Outbox Pattern: 原子写入 order(submitted) + TradeOutbox ──
         # 不再直接调用券商 API，仅持久化到本地 DB；实际下单由 outbox_processor 异步完成
@@ -139,6 +220,7 @@ async def _reject_order(
 
         if order and order.status == "pending":
             order.status = "rejected"
+            order.reject_reason = reason
             order.updated_at = datetime.now(timezone.utc)
 
             audit = AuditLog(

@@ -6,7 +6,12 @@ from pydantic import SecretStr
 from app.ai.analysis_service import AIAnalysisService, CACHE_TTL_SECONDS
 from app.ai.llm_client import LLMClient, PROVIDER_CONFIG
 from app.core.config import LLMSettings
-from app.schemas.ai import StockEventsRequest
+from app.schemas.ai import (
+    AnalyzeStockEventRequest,
+    StockEventsRequest,
+    StockNewsEvent,
+    StrategyDraftRequest,
+)
 
 
 class FakeRedis:
@@ -26,14 +31,25 @@ class FakeLLM:
     provider = "claude"
     model = "test-model"
 
-    def __init__(self, responses: list[dict]):
+    def __init__(
+        self,
+        responses: list[dict | str],
+        chat_responses: list[str] | None = None,
+    ):
         self.responses = responses
+        self.chat_responses = chat_responses or []
         self.web_search_calls = 0
+        self.chat_calls = 0
 
     async def web_search(self, system: str, prompt: str, max_uses: int = 5) -> str:
         response = self.responses[self.web_search_calls]
         self.web_search_calls += 1
-        return json.dumps(response, ensure_ascii=False)
+        return response if isinstance(response, str) else json.dumps(response, ensure_ascii=False)
+
+    async def chat(self, messages: list[dict], **kwargs) -> dict:
+        content = self.chat_responses[self.chat_calls]
+        self.chat_calls += 1
+        return {"choices": [{"message": {"content": content}}]}
 
 
 def analysis_payload() -> dict:
@@ -172,3 +188,68 @@ def test_deepseek_has_official_anthropic_web_search_endpoint():
         PROVIDER_CONFIG["deepseek"]["anthropic_base_url"]
         == "https://api.deepseek.com/anthropic"
     )
+
+
+@pytest.mark.asyncio
+async def test_stock_analysis_repairs_malformed_web_search_json():
+    llm = FakeLLM(
+        ["检索结果格式错误"],
+        [json.dumps(analysis_payload(), ensure_ascii=False)],
+    )
+    service = AIAnalysisService(llm=llm, redis=FakeRedis())
+    event = StockNewsEvent(
+        event_id="event-1",
+        title="公司公告",
+        summary="公告摘要",
+        source_name="交易所",
+        source_url="https://example.com/notice",
+    )
+
+    result = await service.analyze_stock_event(
+        AnalyzeStockEventRequest(
+            symbol="600519.SH",
+            stock_name="贵州茅台",
+            event=event,
+        )
+    )
+
+    assert result.meta.symbol == "600519.SH"
+    assert [section.id for section in result.sections] == [
+        "event_core",
+        "topic_mapping",
+        "candidate_stocks",
+        "risk_checklist",
+    ]
+    assert llm.chat_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_strategy_draft_repairs_and_validates_in_real_sandbox():
+    invalid_code = "class InvalidStrategy:\n    pass"
+    valid_code = """class MovingAverageStrategy(BaseStrategy):
+    params = (
+        ('fast_period', 5),
+        ('slow_period', 20),
+    )
+
+    def __init__(self):
+        self.fast = bt.indicators.SMA(self.data.close, period=self.params.fast_period)
+        self.slow = bt.indicators.SMA(self.data.close, period=self.params.slow_period)
+        self.cross = bt.indicators.CrossOver(self.fast, self.slow)
+
+    def next(self):
+        if not self.position and self.cross[0] > 0:
+            self.buy()
+        elif self.position and self.cross[0] < 0:
+            self.sell()
+"""
+    llm = FakeLLM([], [invalid_code, valid_code])
+    service = AIAnalysisService(llm=llm, redis=FakeRedis())
+
+    result = await service.generate_strategy_draft(
+        StrategyDraftRequest(description="五日均线上穿二十日均线买入，下穿卖出")
+    )
+
+    assert "MovingAverageStrategy" in result.code
+    assert result.params == {"fast_period": 5, "slow_period": 20}
+    assert llm.chat_calls == 2

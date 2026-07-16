@@ -195,7 +195,11 @@ export default function OrdersPage() {
                       {o.order_type === "limit" ? "限价" : "市价"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
-                      {o.price ? formatPrice(o.price) : "—"}
+                      {o.filled_price
+                        ? formatPrice(o.filled_price)
+                        : o.price
+                          ? formatPrice(o.price)
+                          : "—"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">
                       {formatVolume(o.volume)}
@@ -204,7 +208,10 @@ export default function OrdersPage() {
                       {formatVolume(o.filled_volume)}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={STATUS_VARIANT[o.status] ?? "secondary"}>
+                      <Badge
+                        variant={STATUS_VARIANT[o.status] ?? "secondary"}
+                        title={o.reject_reason ?? undefined}
+                      >
                         {ORDER_STATUS_LABELS[o.status] ?? o.status}
                       </Badge>
                     </TableCell>

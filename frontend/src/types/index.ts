@@ -174,6 +174,7 @@ export interface BrokerAccount {
   status: string;
   initial_cash: string;
   cash_balance: string;
+  frozen_cash: string;
   commission_rate: string;
   minimum_commission: string;
   stamp_duty_rate: string;
@@ -196,6 +197,9 @@ export interface Order {
   filled_price: string | null;
   commission: string;
   stamp_duty: string;
+  reject_reason: string | null;
+  reserved_cash: string;
+  reserved_volume: string;
   status: string;
   broker_order_id: string | null;
   origin: string;
@@ -208,6 +212,7 @@ export interface Position {
   symbol: string;
   volume: string;
   avg_cost: string;
+  frozen_volume: string;
   updated_at: string;
 }
 

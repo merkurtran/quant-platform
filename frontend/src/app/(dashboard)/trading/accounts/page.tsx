@@ -130,6 +130,14 @@ export default function AccountsPage() {
                     {formatMoney(Number(a.cash_balance))}
                   </span>
                 </div>
+                {Number(a.frozen_cash) > 0 && (
+                  <div className="mt-1 flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">冻结资金</span>
+                    <span className="tabular-nums text-muted-foreground">
+                      {formatMoney(Number(a.frozen_cash))}
+                    </span>
+                  </div>
+                )}
                 <div className="mt-3 flex justify-end">
                   <Button
                     variant="ghost"

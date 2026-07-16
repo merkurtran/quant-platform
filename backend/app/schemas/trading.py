@@ -18,6 +18,7 @@ class BrokerAccountOut(BaseModel):
     status: str
     initial_cash: Decimal
     cash_balance: Decimal
+    frozen_cash: Decimal
     commission_rate: Decimal
     minimum_commission: Decimal
     stamp_duty_rate: Decimal
@@ -61,6 +62,9 @@ class OrderOut(BaseModel):
     filled_price: Optional[Decimal] = None
     commission: Decimal
     stamp_duty: Decimal
+    reject_reason: Optional[str] = None
+    reserved_cash: Decimal
+    reserved_volume: Decimal
     status: str
     broker_order_id: Optional[str] = None
     origin: str
@@ -75,6 +79,7 @@ class PositionOut(BaseModel):
     symbol: str
     volume: Decimal
     avg_cost: Decimal
+    frozen_volume: Decimal
     updated_at: datetime
 
     model_config = {"from_attributes": True}

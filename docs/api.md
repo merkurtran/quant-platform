@@ -319,8 +319,8 @@ status 值：`queued` / `running` / `success` / `failed`（错误 `20001` 404）
 
 ### POST /broker_accounts
 
-**请求体：** `{ "broker_type": "mock", "account_alias": "模拟账户1" }`  
-**响应 data：** `BrokerAccountOut` — `{ id, broker_type, account_alias, status, created_at }`
+**请求体：** `{ "broker_type": "mock", "account_alias": "模拟账户1", "initial_cash": "1000000.00" }`
+**响应 data：** `BrokerAccountOut`，包含初始资金、可用资金、佣金率、最低佣金、印花税率和滑点率。
 
 ### GET /broker_accounts
 
@@ -337,13 +337,17 @@ status 值：`queued` / `running` / `success` / `failed`（错误 `20001` 404）
 
 side: `buy`/`sell`；order_type: `limit`/`market`；price 市价单为 null。
 
+A 股委托量必须为整数且是 100 股的倍数。未触价限价单保持 `submitted`，触价后由模拟撮合器成交；市价单按最新行情并计入账户滑点成交。
+
 **响应 data：** `OrderOut`
 
 ```json
 { "id": 1, "user_id": 1, "broker_account_id": 1, "strategy_id": null,
   "client_order_id": "...", "symbol": "600519.SH", "side": "buy",
   "order_type": "limit", "price": "1689.500", "volume": "100.00",
-  "filled_volume": "100.00", "status": "filled",
+  "filled_volume": "100.00", "filled_price": "1689.500",
+  "commission": "5.00", "stamp_duty": "0.00", "reject_reason": null,
+  "status": "filled",
   "broker_order_id": null, "origin": "manual", "created_at": "...", "updated_at": "..." }
 ```
 
