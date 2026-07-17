@@ -21,6 +21,15 @@ class KlineListResponse(BaseModel):
     items: list[KlineItem]
 
 
+class QuoteSnapshot(BaseModel):
+    symbol: str
+    price: Decimal
+    previous_close: Decimal | None
+    change: Decimal | None
+    change_pct: Decimal | None
+    ts: datetime
+
+
 class WatchlistItemPublic(BaseModel):
     symbol: str
     name: str | None
@@ -43,3 +52,12 @@ class AddWatchlistItemRequest(BaseModel):
 
 class CreateWatchlistRequest(BaseModel):
     name: str
+
+
+class StockSearchItem(BaseModel):
+    symbol: str
+    name: str
+
+
+class StockSearchResponse(BaseModel):
+    items: list[StockSearchItem]

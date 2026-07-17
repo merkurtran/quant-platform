@@ -34,8 +34,8 @@ def upgrade() -> None:
     sa.PrimaryKeyConstraint('id'),
     sa.UniqueConstraint('symbol', 'ex_date', 'action_type', name='uq_corporate_actions_symbol_ex_date_action_type')
     )
-    op.drop_index(op.f('idx_klines_symbol_period'), table_name='klines')
-    op.drop_index(op.f('klines_ts_idx'), table_name='klines')
+    op.execute("DROP INDEX IF EXISTS idx_klines_symbol_period")
+    op.execute("DROP INDEX IF EXISTS klines_ts_idx")
     # ### end Alembic commands ###
 
 

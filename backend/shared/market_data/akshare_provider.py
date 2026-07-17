@@ -16,6 +16,25 @@ class AKShareProvider(MarketDataProvider):
 
     _MINUTE_PERIOD_MAP = {"1m": "1", "5m": "5", "15m": "15"}
 
+    # AKShare 返回的中文列名 → 标准输出字段名映射
+    _KLINE_COLUMN_MAP = {
+        "日期": "ts",
+        "开盘": "open",
+        "最高": "high",
+        "最低": "low",
+        "收盘": "close",
+        "成交量": "volume",
+        "成交额": "amount",
+    }
+
+    def _df_to_kline_dicts(self, df: pd.DataFrame) -> list[dict]:
+        """将 AKShare 返回的 DataFrame 转换为标准 kline dict 列表。"""
+        col_map = self._KLINE_COLUMN_MAP
+        return [
+            {col_map[k]: (pd.to_datetime(v) if k == "日期" else v) for k, v in row.items() if k in col_map}
+            for _, row in df.iterrows()
+        ]
+
     def get_daily_kline(self, symbol: str, start_date: str) -> list[dict]:
         raw_symbol = symbol.split(".")[0]
 
@@ -28,18 +47,7 @@ class AKShareProvider(MarketDataProvider):
             return []
 
         try:
-            return [
-                {
-                    "ts": pd.to_datetime(row["日期"]),
-                    "open": row["开盘"],
-                    "high": row["最高"],
-                    "low": row["最低"],
-                    "close": row["收盘"],
-                    "volume": row["成交量"],
-                    "amount": row.get("成交额"),
-                }
-                for _, row in df.iterrows()
-            ]
+            return self._df_to_kline_dicts(df)
         except KeyError as e:
             raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
 
@@ -58,30 +66,51 @@ class AKShareProvider(MarketDataProvider):
             return []
 
         try:
-            return [
-                {
-                    "ts": pd.to_datetime(row["日期"]),
-                    "open": row["开盘"],
-                    "high": row["最高"],
-                    "low": row["最低"],
-                    "close": row["收盘"],
-                    "volume": row["成交量"],
-                    "amount": row.get("成交额"),
-                }
-                for _, row in df.iterrows()
-            ]
+            return self._df_to_kline_dicts(df)
         except KeyError as e:
             raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
 
     def get_all_symbols(self) -> list[str]:
         try:
-            df = ak.stock_zh_a_spot_em()
+            df = ak.stock_info_a_code_name()
         except Exception as e:
             raise SymbolNotFoundError(f"Failed to fetch symbol list: {e}") from e
-        return df["代码"].tolist()
+        return df["code"].tolist()
+
+    _spot_cache: dict = {"df": None, "ts": 0.0}
+
+    @classmethod
+    def _get_spot_df(cls):
+        """获取全市场行情 DataFrame，带 60 秒缓存避免频繁请求"""
+        import time
+        now = time.time()
+        if cls._spot_cache["df"] is not None and now - cls._spot_cache["ts"] < 60:
+            return cls._spot_cache["df"]
+        try:
+            df = ak.stock_info_a_code_name()
+        except Exception as e:
+            raise DataSourceConnectionError(f"Failed to fetch stock list: {e}") from e
+        cls._spot_cache["df"] = df
+        cls._spot_cache["ts"] = now
+        return df
+
+    def search_stocks(self, keyword: str, limit: int = 20) -> list[dict]:
+        """按代码或名称模糊搜索 A 股股票"""
+        from shared.market_data.utils import normalize_symbol
+        df = self._get_spot_df()
+        kw = keyword.strip().lower()
+        mask = (
+            df["code"].astype(str).str.lower().str.contains(kw, na=False)
+            | df["name"].astype(str).str.lower().str.contains(kw, na=False)
+        )
+        matched = df[mask].head(limit)
+        return [
+            {"symbol": normalize_symbol(row["code"]), "name": row["name"]}
+            for _, row in matched.iterrows()
+        ]
     
 
-    def get_corporate_actions(self, symbol: str) -> list[dict]:
+    def get_corporate_actions(self, symbol: str, start_date=None) -> list[dict]:
         raw_symbol = symbol.split(".")[0]
         results = []
         # 分红/送股/转增
@@ -114,7 +143,7 @@ class AKShareProvider(MarketDataProvider):
                     })
             except KeyError as e:
                 raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
-        
+
         # 配股
         try:
             rights_df = ak.stock_history_dividend_detail(symbol=raw_symbol, indicator="配股")
@@ -141,3 +170,5 @@ class AKShareProvider(MarketDataProvider):
                     })
             except KeyError as e:
                 raise DataFormatError(f"Unexpected data format from AKShare for {symbol}: missing {e}") from e
+
+        return results

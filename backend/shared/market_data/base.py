@@ -17,12 +17,12 @@ class MarketDataProvider(ABC):
         pass
 
     @abstractmethod
-    def get_minute_kline(self, symbol: str, start_date: str, period: str = "1m") -> list[dict]:
+    def get_minute_kline(self, symbol: str, period: str, start_date: str = "") -> list[dict]:
         """
         获取分钟线数据
         symbol: "600519.SH"
-        start_date: "YYYYMMDD" 格式
         period: "1m" / "5m" / "15m" / "30m" / "60m"
+        start_date: "YYYY-MM-DD HH:MM:SS" 格式
         返回格式同 get_daily_kline
         """
         pass

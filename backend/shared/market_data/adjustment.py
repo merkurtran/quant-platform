@@ -1,5 +1,6 @@
 from enum import Enum
 import bisect
+import warnings
 from decimal import Decimal 
 
 from shared.market_data.utils import _safe_decimal
@@ -18,12 +19,9 @@ def _get_theoretical_price(prev_close: Decimal, action: dict) -> Decimal | None:
     stock_ratio = _safe_decimal(action.get("stock_ratio", 0))
     rights_price = _safe_decimal(action.get("rights_price", 0))
     rights_ratio = _safe_decimal(action.get("rights_ratio", 0))
-    if rights_price > 0 and rights_ratio > 0:
-        theoretical = (prev_close + rights_price * rights_ratio) / (1 + rights_ratio)
-        return theoretical if theoretical > 0 else None
-
-    # 分红/送股/两者组合,统一走这一个公式,不需要关心 action_type 具体是哪个标签
-    theoretical = (prev_close - cash) / (1 + stock_ratio)
+    theoretical = (
+        prev_close - cash + rights_price * rights_ratio
+    ) / (1 + stock_ratio + rights_ratio)
     return theoretical if theoretical > 0 else None
 
 
@@ -33,18 +31,48 @@ def _build_action_factors(raw_klines: list[dict], corporate_actions: list[dict])
     因子 = prev_close / theoretical_price
     所有复权方式共用此函数, 区别在于后续怎么使用这些因子
     """
-    factors = []
+    grouped_actions: dict = {}
     for action in corporate_actions:
-        prev_close = _find_prev_close(raw_klines, action["ex_date"])
+        ex_date = action["ex_date"]
+        grouped = grouped_actions.setdefault(
+            ex_date,
+            {
+                "ex_date": ex_date,
+                "cash_per_share": Decimal("0"),
+                "stock_ratio": Decimal("0"),
+                "rights_ratio": Decimal("0"),
+                "rights_proceeds": Decimal("0"),
+            },
+        )
+        rights_ratio = _safe_decimal(action.get("rights_ratio", 0))
+        grouped["cash_per_share"] += _safe_decimal(action.get("cash_per_share", 0))
+        grouped["stock_ratio"] += _safe_decimal(action.get("stock_ratio", 0))
+        grouped["rights_ratio"] += rights_ratio
+        grouped["rights_proceeds"] += (
+            _safe_decimal(action.get("rights_price", 0)) * rights_ratio
+        )
+
+    factors = []
+    for ex_date, action in sorted(grouped_actions.items()):
+        prev_close = _find_prev_close(raw_klines, ex_date)
         if prev_close is None:
             continue
-            
-        theoretical = _get_theoretical_price(prev_close, action)
+
+        rights_ratio = action["rights_ratio"]
+        normalized_action = {
+            **action,
+            "rights_price": (
+                action["rights_proceeds"] / rights_ratio
+                if rights_ratio > 0
+                else Decimal("0")
+            ),
+        }
+        theoretical = _get_theoretical_price(prev_close, normalized_action)
         if theoretical is None or theoretical <= 0:
             continue
-            
+
         factor = prev_close / theoretical
-        factors.append((action["ex_date"], factor))
+        factors.append((ex_date, factor))
     
     return factors
 
@@ -67,26 +95,47 @@ def _apply_qfq_ratio(raw_klines: list[dict], segment_factors: list[Decimal], ex_
 
 def _apply_qfq_diff(raw_klines: list[dict], segment_factors: list[Decimal], ex_dates: list, original_klines: list[dict]) -> list[dict]:
     """
-    预留: 差值前复权
-    TODO: 实现
+    差值前复权 (预留接口，暂未实现)
+
+    .. deprecated::
+        此复权方式尚未实现，调用将触发 DeprecationWarning。
     """
-    raise NotImplementedError("差值前复权暂未实现")
+    warnings.warn(
+        "差值前复权(_apply_qfq_diff)暂未实现，将回退到比例前复权",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return _apply_qfq_ratio(raw_klines, segment_factors, ex_dates)
 
 
 def _apply_hfq_ratio(raw_klines: list[dict], segment_factors: list[Decimal], ex_dates: list) -> list[dict]:
     """
-    预留: 比例后复权
-    TODO: 实现
+    比例后复权 (预留接口，暂未实现)
+
+    .. deprecated::
+        此复权方式尚未实现，调用将触发 DeprecationWarning。
     """
-    raise NotImplementedError("比例后复权暂未实现")
+    warnings.warn(
+        "比例后复权(_apply_hfq_ratio)暂未实现，返回原始K线数据",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return raw_klines
 
 
 def _apply_hfq_diff(raw_klines: list[dict], segment_factors: list[Decimal], ex_dates: list, original_klines: list[dict]) -> list[dict]:
     """
-    预留: 差值后复权
-    TODO: 实现
+    差值后复权 (预留接口，暂未实现)
+
+    .. deprecated::
+        此复权方式尚未实现，调用将触发 DeprecationWarning。
     """
-    raise NotImplementedError("差值后复权暂未实现")
+    warnings.warn(
+        "差值后复权(_apply_hfq_diff)暂未实现，返回原始K线数据",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    return original_klines if original_klines else raw_klines
 
 
 def calculate_adjusted_prices(raw_klines: list[dict], corporate_actions: list[dict], method: AdjustMethod) -> list[dict]:

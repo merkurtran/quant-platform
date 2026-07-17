@@ -1,0 +1,16 @@
+{
+  "include": ["backend"],
+  "exclude": [
+    "backend/.venv",
+    "backend/.pytest_cache",
+    "backend/**/__pycache__"
+  ],
+  "venvPath": "backend",
+  "venv": ".venv",
+  "executionEnvironments": [
+    {
+      "root": "backend",
+      "extraPaths": ["backend"]
+    }
+  ]
+}
