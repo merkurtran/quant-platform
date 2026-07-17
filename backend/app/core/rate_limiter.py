@@ -26,7 +26,7 @@ class RateLimiter:
     async def check(self, key: str, limit: int, window_seconds: int = 60) -> bool:
         now = time.time()
         member = f"{now}:{uuid.uuid4().hex[:8]}"
-        result = await (await get_async_redis_client()).eval(
+        result = await get_async_redis_client().eval(
             _RATE_LIMIT_SCRIPT, 1, key, limit, window_seconds, now, member
         )
         return bool(result)

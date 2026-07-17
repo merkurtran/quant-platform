@@ -223,3 +223,7 @@ __marimo__/
 .DS_Store
 **/.DS_Store
 .run/
+
+# Local browser verification artifacts
+.playwright-cli/
+output/playwright/

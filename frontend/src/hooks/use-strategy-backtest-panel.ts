@@ -101,6 +101,7 @@ export function useStrategyBacktestPanel(
     setBacktestSymbol(run.symbols[0] ?? "");
     setParameterFields(paramsToFields(run.params_snapshot, strategy?.code));
     const params = new URLSearchParams(searchParams);
+    params.set("panel", "backtest");
     params.set("runId", run.run_id.toString());
     params.set("strategyId", run.strategy_id.toString());
     if (run.symbols[0]) params.set("symbol", run.symbols[0]);

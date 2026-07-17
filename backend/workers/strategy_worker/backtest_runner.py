@@ -722,21 +722,23 @@ def _run_backtest_in_process(config: BacktestConfig) -> BacktestResult:
 
 # ==================== 主入口函数 ====================
 
-def _worker_process_main(config: BacktestConfig, queue) -> None:
+def _worker_process_main(config: BacktestConfig, connection) -> None:
     """
     工作进程的主函数
     """
     try:
         result = _run_backtest_in_process(config)
-        queue.put(result)
     except Exception as e:
-        # 捕获所有异常，防止子进程崩溃导致队列为空
-        error_result = BacktestResult(
+        result = BacktestResult(
             success=False,
             error_message=f"工作进程异常: {str(e)}",
             error_type='WorkerProcessError',
         )
-        queue.put(error_result)
+    try:
+        # Queue.put() starts a feeder thread, which can fail after RLIMIT_AS is applied.
+        connection.send(result)
+    finally:
+        connection.close()
 
 
 def run_backtest(config: BacktestConfig) -> BacktestResult:
@@ -770,23 +772,46 @@ def run_backtest(config: BacktestConfig) -> BacktestResult:
     
     start_time = time.time()
     process = None
-    queue = None
+    parent_connection = None
+    child_connection = None
     
     try:
         # 使用 spawn 上下文确保完全隔离
         ctx = multiprocessing.get_context('spawn')
-        queue = ctx.Queue()
+        parent_connection, child_connection = ctx.Pipe(duplex=False)
         process = ctx.Process(
             target=_worker_process_main,
-            args=(config, queue),
+            args=(config, child_connection),
             daemon=True,  # 主进程退出时自动终止
         )
         
         process.start()
+        child_connection.close()
+        child_connection = None
         
-        # 等待子进程完成（比 worker 内部超时多 15 秒）
         from app.core.config import get_settings
-        process.join(timeout=get_settings().backtest_worker.process_join_timeout)
+        process_timeout = get_settings().backtest_worker.process_join_timeout
+        deadline = time.monotonic() + process_timeout
+        result = None
+
+        # Receive before join so a large result cannot fill the pipe and block the child.
+        while time.monotonic() < deadline:
+            if parent_connection.poll(0.1):
+                try:
+                    result = parent_connection.recv()
+                except EOFError:
+                    pass
+                break
+            if not process.is_alive():
+                break
+
+        if result is None and parent_connection.poll():
+            try:
+                result = parent_connection.recv()
+            except EOFError:
+                pass
+
+        process.join(timeout=max(0, deadline - time.monotonic()))
         
         # 检查子进程是否还在运行（超时）
         if process.is_alive():
@@ -812,8 +837,7 @@ def run_backtest(config: BacktestConfig) -> BacktestResult:
             )
         
         # 获取结果
-        if queue is not None and not queue.empty():
-            result = queue.get_nowait()
+        if result is not None:
             logger.info(f"回测完成: run_id={config.run_id}, success={result.success}, "
                        f"time={result.execution_time_ms}ms")
             return result
@@ -850,13 +874,10 @@ def run_backtest(config: BacktestConfig) -> BacktestResult:
             except Exception:
                 pass
         
-        # 清理队列
-        if queue is not None:
-            try:
-                while not queue.empty():
-                    queue.get_nowait()
-            except Exception:
-                pass
+        if parent_connection is not None:
+            parent_connection.close()
+        if child_connection is not None:
+            child_connection.close()
 
 
 # ==================== 辅助函数（用于测试） ====================
